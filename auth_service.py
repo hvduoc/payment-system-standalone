@@ -11,7 +11,7 @@ from database_production import User, get_db
 import secrets
 
 # Secret key cho JWT
-SECRET_KEY = "airbnb-payment-ledger-secret-key-vietnam-2025"
+SECRET_KEY = "payment-secret-2025"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 giờ
 

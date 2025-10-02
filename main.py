@@ -42,7 +42,7 @@ app = FastAPI(
 
 templates = Jinja2Templates(directory="templates")
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# app.mount("/static", StaticFiles(directory="static"), name="static")  # Optional static files
 
 # Helper function for template
 def get_role_display_name_helper(role):
