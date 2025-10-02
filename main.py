@@ -15,6 +15,7 @@ import json
 import os
 import uuid
 import shutil
+import pytz
 
 # Import các module tự tạo
 from database_production import get_db, create_tables, User, Payment, Handover  
@@ -70,8 +71,15 @@ def get_role_display_name_helper(role):
     }
     return roles.get(role, role)
 
-# Add helper to template globals
+# Add helper to template globals với Vietnam timezone
+vietnam_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+
+def get_vietnam_time():
+    """Lấy thời gian hiện tại theo múi giờ Việt Nam"""
+    return datetime.now(vietnam_tz)
+
 templates.env.globals['getRoleDisplayName'] = get_role_display_name_helper
+templates.env.globals['getVietnamTime'] = get_vietnam_time
 
 # Dependency để lấy user hiện tại
 def get_current_user(request: Request, db: Session = Depends(get_db)):
@@ -320,7 +328,7 @@ async def get_dashboard(
         "cash_balance": cash_payments,
         "cash_pending_handover": cash_pending,
         "total_handovers": len(handovers),
-        "last_updated": datetime.now().isoformat()
+        "last_updated": get_vietnam_time().isoformat()
     }
 
 @app.post("/api/handovers")
@@ -504,6 +512,139 @@ async def create_new_user(
         }}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.put("/api/admin/users/{user_id}")
+async def update_user(
+    user_id: int,
+    full_name: str = Form(...),
+    role: str = Form(...),
+    phone: str = Form(default=""),
+    email: str = Form(default=""),
+    password: str = Form(default=""),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Cập nhật thông tin người dùng"""
+    if current_user.role != "owner":
+        raise HTTPException(status_code=403, detail="Chỉ chủ sở hữu mới có quyền sửa user")
+    
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
+        
+        # Update basic info
+        user.full_name = full_name
+        user.role = role
+        user.phone = phone
+        user.email = email
+        
+        # Update password if provided
+        if password:
+            user.password_hash = get_password_hash(password)
+        
+        user.updated_at = get_vietnam_time()
+        db.commit()
+        db.refresh(user)
+        
+        return {"success": True, "user": {
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.full_name,
+            "role": user.role,
+            "role_display": get_role_display_name(user.role),
+            "phone": user.phone,
+            "email": user.email
+        }}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/api/admin/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Xóa người dùng (vô hiệu hóa)"""
+    if current_user.role != "owner":
+        raise HTTPException(status_code=403, detail="Chỉ chủ sở hữu mới có quyền xóa user")
+    
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
+        
+        if user.id == current_user.id:
+            raise HTTPException(status_code=400, detail="Không thể xóa chính mình")
+        
+        # Soft delete - chỉ vô hiệu hóa
+        user.is_active = False
+        user.updated_at = get_vietnam_time()
+        db.commit()
+        
+        return {"success": True, "message": f"Đã vô hiệu hóa người dùng {user.username}"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/admin/users/{user_id}/activate")
+async def activate_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Kích hoạt lại người dùng"""
+    if current_user.role != "owner":
+        raise HTTPException(status_code=403, detail="Chỉ chủ sở hữu mới có quyền kích hoạt user")
+    
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Không tìm thấy người dùng")
+        
+        user.is_active = True
+        user.updated_at = get_vietnam_time()
+        db.commit()
+        
+        return {"success": True, "message": f"Đã kích hoạt người dùng {user.username}"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/test-login")
+async def test_user_login(
+    username: str = Form(...),
+    password: str = Form(...),
+    db: Session = Depends(get_db)
+):
+    """Test login cho bất kỳ user nào"""
+    try:
+        user = authenticate_user(db, username, password)
+        if user:
+            return {
+                "success": True,
+                "message": f"✅ Login thành công cho {username}",
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "full_name": user.full_name,
+                    "role": user.role,
+                    "role_display": get_role_display_name(user.role),
+                    "is_active": user.is_active
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"❌ Login thất bại cho {username}",
+                "error": "Tài khoản không tồn tại hoặc mật khẩu sai"
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"❌ Lỗi khi test login: {str(e)}"
+        }
 
 if __name__ == "__main__":
     import uvicorn
