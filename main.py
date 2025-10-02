@@ -18,15 +18,30 @@ import shutil
 
 # Import các module tự tạo
 from database_production import get_db, create_tables, User, Payment, Handover  
-from auth_service import (
-    authenticate_user, 
-    create_access_token, 
-    get_current_user_from_token,
-    create_user,
-    get_all_users,
-    get_role_display_name,
-    get_password_hash
-)
+
+# Try simple auth first, fallback to original if needed
+try:
+    from auth_service_simple import (
+        authenticate_user, 
+        create_access_token, 
+        get_current_user_from_token,
+        create_user,
+        get_all_users,
+        get_role_display_name,
+        get_password_hash
+    )
+    print("✅ Using simple authentication (SHA256)")
+except ImportError:
+    from auth_service import (
+        authenticate_user, 
+        create_access_token, 
+        get_current_user_from_token,
+        create_user,
+        get_all_users,
+        get_role_display_name,
+        get_password_hash
+    )
+    print("⚠️ Using bcrypt authentication")
 
 # Thiết lập
 UPLOAD_DIR = "uploads"
@@ -778,11 +793,70 @@ async def emergency_access(request: Request):
     return templates.TemplateResponse("emergency_login.html", {"request": request})
 
 @app.get("/debug/fix-auth")
-async def debug_fix_auth():
+async def debug_fix_auth(db: Session = Depends(get_db)):
     """Debug endpoint: Fix authentication"""
     try:
-        from fix_auth_production import fix_auth_production
-        success = fix_auth_production()
-        return {"status": "success" if success else "failed", "message": "Authentication fix completed"}
+        print("🔧 Starting auth fix...")
+        import hashlib
+        
+        # Delete all users
+        db.query(User).delete()
+        db.commit()
+        print("🗑️ Deleted old users")
+        
+        # Create admin with SHA256
+        admin_hash = hashlib.sha256("admin123".encode()).hexdigest()
+        admin_user = User(
+            username="admin",
+            password_hash=admin_hash,
+            full_name="Admin System",
+            role="owner",
+            phone="0901234567",
+            email="admin@system.com",
+            is_active=True
+        )
+        db.add(admin_user)
+        
+        # Create emergency user
+        emergency_hash = hashlib.sha256("emergency2025".encode()).hexdigest()
+        emergency_user = User(
+            username="emergency",
+            password_hash=emergency_hash,
+            full_name="Emergency Access",
+            role="owner",
+            phone="0000000000",
+            email="emergency@system.com",
+            is_active=True
+        )
+        db.add(emergency_user)
+        
+        # Create manager
+        manager_hash = hashlib.sha256("manager123".encode()).hexdigest()
+        manager_user = User(
+            username="manager1",
+            password_hash=manager_hash,
+            full_name="Nguyễn Văn Quản Lý",
+            role="manager",
+            phone="0907654321", 
+            email="manager@system.com",
+            is_active=True
+        )
+        db.add(manager_user)
+        
+        db.commit()
+        print("✅ Users created successfully")
+        
+        return {
+            "status": "success", 
+            "message": "Authentication fixed successfully",
+            "users_created": [
+                {"username": "admin", "password": "admin123", "role": "owner"},
+                {"username": "emergency", "password": "emergency2025", "role": "owner"},
+                {"username": "manager1", "password": "manager123", "role": "manager"}
+            ],
+            "auth_method": "SHA256"
+        }
+        
     except Exception as e:
+        db.rollback()
         return {"status": "error", "message": str(e)}
