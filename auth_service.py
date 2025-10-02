@@ -9,9 +9,10 @@ from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from database_production import User, get_db
 import secrets
+import os
 
-# Secret key cho JWT
-SECRET_KEY = "payment-secret-2025"
+# Secret key cho JWT - lấy từ environment hoặc default
+SECRET_KEY = os.getenv("SECRET_KEY", "payment-secret-2025-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 giờ
 
