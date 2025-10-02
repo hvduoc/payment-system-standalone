@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý người dùng - Hệ thống Thu Chi Airbnb</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <div class="bg-white shadow-sm border-b">
+        <div class="container mx-auto px-4 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-2">
+                        <i class="fas fa-money-bill-wave text-green-600 text-xl"></i>
+                        <h1 class="text-xl font-bold text-gray-800">Hệ thống Thu Chi Airbnb</h1>
+                        <span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">v2.0 Production</span>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-600">
+                        <i class="fas fa-clock mr-1"></i>
+                        <span id="currentTime">{{ getVietnamTime().strftime('%H:%M:%S %d/%m/%Y') }}</span>
+                    </span>
+                    <span class="text-sm text-gray-600">Admin System</span>
+                    <span class="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">Chủ sở hữu</span>
+                    <a href="/api/logout" class="text-red-600 hover:text-red-800">
+                        <i class="fas fa-sign-out-alt mr-1"></i>Đăng xuất
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="bg-white border-b">
+        <div class="container mx-auto px-4">
+            <nav class="flex space-x-8">
+                <a href="/" class="py-3 px-1 border-b-2 border-transparent hover:border-gray-300 text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-chart-line mr-2"></i>Tổng quan
+                </a>
+                <a href="/payments" class="py-3 px-1 border-b-2 border-transparent hover:border-gray-300 text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-receipt mr-2"></i>Ghi nhận thu
+                </a>
+                <a href="/handovers" class="py-3 px-1 border-b-2 border-transparent hover:border-gray-300 text-gray-600 hover:text-gray-800">
+                    <i class="fas fa-handshake mr-2"></i>Bàn giao
+                </a>
+                <a href="/admin/users" class="py-3 px-1 border-b-2 border-green-500 text-green-600">
+                    <i class="fas fa-users mr-2"></i>Đội ngũ
+                </a>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-800">Quản lý đội ngũ</h2>
+                <p class="text-gray-600">Thêm, sửa, xóa và quản lý tài khoản người dùng</p>
+            </div>
+            <button onclick="openCreateModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">
+                <i class="fas fa-plus mr-2"></i>Thêm người dùng
+            </button>
+        </div>
+
+        <!-- Users List -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6">
+                <div id="loading" class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-gray-400 text-2xl"></i>
+                    <p class="text-gray-500 mt-2">Đang tải danh sách người dùng...</p>
+                </div>
+                
+                <div id="usersList" class="hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Người dùng</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Vai trò</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Liên hệ</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Trạng thái</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="usersTableBody" class="divide-y divide-gray-200">
+                                <!-- Users will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create/Edit User Modal -->
+    <div id="userModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="modalTitle" class="text-lg font-semibold">Thêm người dùng mới</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="userForm" class="space-y-4">
+                <input type="hidden" id="userId" value="">
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tên đăng nhập</label>
+                    <input type="text" id="username" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" required>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
+                    <input type="password" id="password" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" required>
+                    <p class="text-xs text-gray-500 mt-1">Để trống nếu không muốn thay đổi (khi sửa)</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Họ và tên</label>
+                    <input type="text" id="fullName" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" required>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Vai trò</label>
+                    <select id="role" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" required>
+                        <option value="">Chọn vai trò</option>
+                        <option value="owner">Chủ sở hữu</option>
+                        <option value="manager">Quản lý</option>
+                        <option value="assistant">Trợ lý</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Số điện thoại</label>
+                    <input type="tel" id="phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input type="email" id="email" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                </div>
+                
+                <div class="flex space-x-3 pt-4">
+                    <button type="submit" class="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition">
+                        <i class="fas fa-save mr-2"></i>Lưu
+                    </button>
+                    <button type="button" onclick="closeModal()" class="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400 transition">
+                        Hủy
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Test Login Modal -->
+    <div id="testLoginModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">Test đăng nhập</h3>
+                <button onclick="closeTestModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="testLoginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tên đăng nhập</label>
+                    <input type="text" id="testUsername" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Mật khẩu</label>
+                    <input type="password" id="testPassword" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                
+                <div id="testResult" class="hidden p-3 rounded-lg"></div>
+                
+                <div class="flex space-x-3 pt-4">
+                    <button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">
+                        <i class="fas fa-key mr-2"></i>Test Login
+                    </button>
+                    <button type="button" onclick="closeTestModal()" class="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400 transition">
+                        Đóng
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let users = [];
+        let editingUserId = null;
+
+        // Load users on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadUsers();
+            updateTime();
+            setInterval(updateTime, 1000);
+        });
+
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleString('vi-VN', {
+                timeZone: 'Asia/Ho_Chi_Minh',
+                hour: '2-digit',
+                minute: '2-digit', 
+                second: '2-digit',
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+            document.getElementById('currentTime').textContent = timeString;
+        }
+
+        async function loadUsers() {
+            try {
+                const response = await axios.get('/api/users');
+                users = response.data.users;
+                renderUsers();
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('usersList').classList.remove('hidden');
+            } catch (error) {
+                console.error('Error loading users:', error);
+                document.getElementById('loading').innerHTML = `
+                    <i class="fas fa-exclamation-triangle text-red-400 text-2xl"></i>
+                    <p class="text-red-500 mt-2">Lỗi khi tải danh sách người dùng</p>
+                `;
+            }
+        }
+
+        function renderUsers() {
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = '';
+
+            users.forEach(user => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50';
+                
+                const roleColors = {
+                    'owner': 'bg-red-100 text-red-800',
+                    'manager': 'bg-blue-100 text-blue-800', 
+                    'assistant': 'bg-green-100 text-green-800'
+                };
+
+                row.innerHTML = `
+                    <td class="px-4 py-3">
+                        <div class="flex items-center">
+                            <div class="h-8 w-8 bg-gray-300 rounded-full flex items-center justify-center mr-3">
+                                <i class="fas fa-user text-gray-600 text-sm"></i>
+                            </div>
+                            <div>
+                                <div class="font-medium text-gray-900">${user.full_name}</div>
+                                <div class="text-sm text-gray-500">@${user.username}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${roleColors[user.role] || 'bg-gray-100 text-gray-800'}">
+                            ${user.role_display}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-500">
+                        <div>${user.phone || 'Chưa có SĐT'}</div>
+                        <div>${user.email || 'Chưa có email'}</div>
+                    </td>
+                    <td class="px-4 py-3">
+                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                            ${user.is_active ? 'Hoạt động' : 'Vô hiệu hóa'}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="flex space-x-2">
+                            <button onclick="testUserLogin('${user.username}')" class="text-blue-600 hover:text-blue-800" title="Test login">
+                                <i class="fas fa-key"></i>
+                            </button>
+                            <button onclick="editUser(${user.id})" class="text-green-600 hover:text-green-800" title="Sửa">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            ${user.is_active ? 
+                                `<button onclick="deactivateUser(${user.id})" class="text-red-600 hover:text-red-800" title="Vô hiệu hóa">
+                                    <i class="fas fa-ban"></i>
+                                </button>` :
+                                `<button onclick="activateUser(${user.id})" class="text-green-600 hover:text-green-800" title="Kích hoạt">
+                                    <i class="fas fa-check-circle"></i>
+                                </button>`
+                            }
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function openCreateModal() {
+            editingUserId = null;
+            document.getElementById('modalTitle').textContent = 'Thêm người dùng mới';
+            document.getElementById('userForm').reset();
+            document.getElementById('userId').value = '';
+            document.getElementById('username').disabled = false;
+            document.getElementById('password').required = true;
+            document.getElementById('userModal').classList.remove('hidden');
+        }
+
+        function editUser(userId) {
+            const user = users.find(u => u.id === userId);
+            if (!user) return;
+
+            editingUserId = userId;
+            document.getElementById('modalTitle').textContent = 'Sửa thông tin người dùng';
+            document.getElementById('userId').value = userId;
+            document.getElementById('username').value = user.username;
+            document.getElementById('username').disabled = true;
+            document.getElementById('password').value = '';
+            document.getElementById('password').required = false;
+            document.getElementById('fullName').value = user.full_name;
+            document.getElementById('role').value = user.role;
+            document.getElementById('phone').value = user.phone || '';
+            document.getElementById('email').value = user.email || '';
+            document.getElementById('userModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('userModal').classList.add('hidden');
+        }
+
+        function testUserLogin(username) {
+            document.getElementById('testUsername').value = username;
+            document.getElementById('testPassword').value = '';
+            document.getElementById('testResult').classList.add('hidden');
+            document.getElementById('testLoginModal').classList.remove('hidden');
+        }
+
+        function closeTestModal() {
+            document.getElementById('testLoginModal').classList.add('hidden');
+        }
+
+        // Form submissions
+        document.getElementById('userForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            const userId = document.getElementById('userId').value;
+            
+            formData.append('username', document.getElementById('username').value);
+            formData.append('full_name', document.getElementById('fullName').value);
+            formData.append('role', document.getElementById('role').value);
+            formData.append('phone', document.getElementById('phone').value);
+            formData.append('email', document.getElementById('email').value);
+            
+            const password = document.getElementById('password').value;
+            if (password) {
+                formData.append('password', password);
+            }
+
+            try {
+                let response;
+                if (editingUserId) {
+                    // Update user
+                    response = await axios.put(`/api/admin/users/${editingUserId}`, formData);
+                } else {
+                    // Create user  
+                    response = await axios.post('/api/admin/users', formData);
+                }
+
+                if (response.data.success) {
+                    closeModal();
+                    loadUsers();
+                    alert(editingUserId ? 'Cập nhật thành công!' : 'Tạo người dùng thành công!');
+                } else {
+                    alert('Lỗi: ' + (response.data.message || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Lỗi: ' + (error.response?.data?.detail || error.message));
+            }
+        });
+
+        document.getElementById('testLoginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('username', document.getElementById('testUsername').value);
+            formData.append('password', document.getElementById('testPassword').value);
+
+            try {
+                const response = await axios.post('/api/test-login', formData);
+                const result = document.getElementById('testResult');
+                
+                result.className = response.data.success ? 
+                    'p-3 rounded-lg bg-green-100 text-green-800' : 
+                    'p-3 rounded-lg bg-red-100 text-red-800';
+                
+                result.innerHTML = `
+                    <div class="flex items-center">
+                        <i class="fas fa-${response.data.success ? 'check-circle' : 'times-circle'} mr-2"></i>
+                        ${response.data.message}
+                    </div>
+                    ${response.data.user ? `
+                        <div class="mt-2 text-sm">
+                            <strong>Thông tin:</strong> ${response.data.user.full_name} (${response.data.user.role_display})
+                        </div>
+                    ` : ''}
+                `;
+                result.classList.remove('hidden');
+            } catch (error) {
+                const result = document.getElementById('testResult');
+                result.className = 'p-3 rounded-lg bg-red-100 text-red-800';
+                result.innerHTML = `
+                    <div class="flex items-center">
+                        <i class="fas fa-times-circle mr-2"></i>
+                        Lỗi: ${error.response?.data?.detail || error.message}
+                    </div>
+                `;
+                result.classList.remove('hidden');
+            }
+        });
+
+        async function deactivateUser(userId) {
+            if (!confirm('Bạn có chắc muốn vô hiệu hóa người dùng này?')) return;
+            
+            try {
+                const response = await axios.delete(`/api/admin/users/${userId}`);
+                if (response.data.success) {
+                    loadUsers();
+                    alert('Đã vô hiệu hóa người dùng');
+                }
+            } catch (error) {
+                alert('Lỗi: ' + (error.response?.data?.detail || error.message));
+            }
+        }
+
+        async function activateUser(userId) {
+            try {
+                const response = await axios.post(`/api/admin/users/${userId}/activate`);
+                if (response.data.success) {
+                    loadUsers();
+                    alert('Đã kích hoạt người dùng');
+                }
+            } catch (error) {
+                alert('Lỗi: ' + (error.response?.data?.detail || error.message));
+            }
+        }
+    </script>
+</body>
+</html>

@@ -220,7 +220,7 @@ async def add_payment(
         
         image_path = f"/uploads/{unique_filename}"
     
-    # Tạo payment record
+    # Tạo payment record với Vietnam timezone
     payment = Payment(
         booking_id=booking_id,
         guest_name=guest_name,
@@ -238,6 +238,9 @@ async def add_payment(
     db.commit()
     db.refresh(payment)
     
+    # Format time for Vietnam timezone
+    vietnam_time = get_vietnam_time()
+    
     return {"success": True, "payment": {
         "id": payment.id,
         "booking_id": payment.booking_id,
@@ -248,7 +251,8 @@ async def add_payment(
         "collected_by": payment.collected_by,
         "notes": payment.notes,
         "receipt_image": payment.receipt_image,
-        "created_at": payment.created_at.isoformat()
+        "created_at": vietnam_time.strftime("%H:%M:%S %d/%m/%Y"),
+        "timestamp": vietnam_time.isoformat()
     }}
 
 @app.get("/api/payments")
@@ -268,6 +272,13 @@ async def get_payments(
     
     payments_data = []
     for payment in payments:
+        # Convert datetime to Vietnam timezone for display
+        if payment.created_at:
+            # Assume payment.created_at is already in Vietnam time (from database)
+            display_time = payment.created_at.strftime("%H:%M:%S %d/%m/%Y") 
+        else:
+            display_time = "N/A"
+            
         payments_data.append({
             "id": payment.id,
             "booking_id": payment.booking_id,
@@ -279,8 +290,8 @@ async def get_payments(
             "notes": payment.notes,
             "receipt_image": payment.receipt_image,
             "status": payment.status,
-            "created_at": payment.created_at.isoformat(),
-            "timestamp": payment.created_at.isoformat()
+            "created_at": display_time,
+            "timestamp": payment.created_at.isoformat() if payment.created_at else None
         })
     
     return {"payments": payments_data}

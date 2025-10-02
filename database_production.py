@@ -7,6 +7,14 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 import os
+import pytz
+
+# Vietnam timezone
+vietnam_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+
+def get_vietnam_time():
+    """Lấy thời gian hiện tại theo múi giờ Việt Nam"""
+    return datetime.now(vietnam_tz)
 
 # Lấy DATABASE_URL từ environment (Railway sẽ cung cấp)
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -38,8 +46,8 @@ class User(Base):
     phone = Column(String(15), nullable=True)
     email = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: get_vietnam_time().replace(tzinfo=None))
+    updated_at = Column(DateTime, default=lambda: get_vietnam_time().replace(tzinfo=None), onupdate=lambda: get_vietnam_time().replace(tzinfo=None))
 
 class Payment(Base):
     """Bảng ghi nhận thu"""
@@ -56,8 +64,8 @@ class Payment(Base):
     receipt_image = Column(String(255), nullable=True)
     status = Column(String(20), default="completed")
     added_by_user_id = Column(Integer, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: get_vietnam_time().replace(tzinfo=None))
+    updated_at = Column(DateTime, default=lambda: get_vietnam_time().replace(tzinfo=None), onupdate=lambda: get_vietnam_time().replace(tzinfo=None))
 
 class Handover(Base):
     """Bảng bàn giao tiền mặt"""
@@ -71,8 +79,8 @@ class Handover(Base):
     handover_image = Column(String(255), nullable=True)
     status = Column(String(20), default="completed")
     signature_status = Column(String(20), default="pending")  # pending, signed
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: get_vietnam_time().replace(tzinfo=None))
+    updated_at = Column(DateTime, default=lambda: get_vietnam_time().replace(tzinfo=None), onupdate=lambda: get_vietnam_time().replace(tzinfo=None))
 
 # Tạo tất cả các bảng
 def create_tables():
