@@ -7,7 +7,7 @@ from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
-from database import User, get_db
+from database_production import User, get_db
 import secrets
 
 # Secret key cho JWT
