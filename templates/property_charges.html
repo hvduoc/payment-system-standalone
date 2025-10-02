@@ -1,0 +1,134 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-3">Phụ phí căn hộ</h2>
+  <form class="row mb-3" id="filter-form">
+    <div class="col-auto">
+      <select id="filter-building" class="form-select">
+        <option value="">-- Chọn tòa nhà --</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <select id="filter-property" class="form-select">
+        <option value="">-- Chọn căn hộ --</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <button class="btn btn-primary" type="button" id="btn-filter">Xem phụ phí</button>
+    </div>
+  </form>
+  <div id="charges-list"></div>
+  <div id="charge-form-area"></div>
+</div>
+<script>
+let PROP_CACHE = [];
+async function loadBuildings() {
+  try {
+    const buildings = await fetch('http://127.0.0.1:8000/api/buildings').then(r => r.json());
+    const sel = document.getElementById('filter-building');
+    sel.innerHTML = '<option value="">-- Chọn tòa nhà --</option>' + buildings.map(b => `<option value="${b.id}">${b.name}</option>`).join('');
+  } catch (error) {
+    console.error('Error loading buildings:', error);
+  }
+}
+
+async function loadProperties(buildingId = null) {
+  try {
+    let url = 'http://127.0.0.1:8000/api/properties';
+    if (buildingId) {
+      url += `?building_id=${buildingId}`;
+    }
+    PROP_CACHE = await fetch(url).then(r => r.json());
+    const sel = document.getElementById('filter-property');
+    sel.innerHTML = '<option value="">-- Chọn căn hộ --</option>' + PROP_CACHE.map(p => `<option value="${p.id}">${p.short_name}</option>`).join('');
+  } catch (error) {
+    console.error('Error loading properties:', error);
+  }
+}
+
+async function loadCharges(propertyId) {
+  const res = await fetch(`/extra_charges?property_id=${propertyId}`);
+  const data = await res.json();
+  if (!data.length) {
+    document.getElementById('charges-list').innerHTML = `<div class='alert alert-info'>Chưa có dữ liệu phụ phí cho căn hộ #${propertyId}</div>`;
+    return;
+  }
+  document.getElementById('charges-list').innerHTML = `
+    <table class='table table-bordered'>
+      <thead><tr><th>Tháng</th><th>Tên khoản phí</th><th>Số tiền</th><th>Ghi chú</th><th></th></tr></thead>
+      <tbody>
+        ${data.map(c=>`
+          <tr>
+            <td>${c.charge_month}</td>
+            <td>${c.charge_name}</td>
+            <td>${c.charge_amount.toLocaleString('vi-VN')}</td>
+            <td>${c.charge_note||''}</td>
+            <td><button class='btn btn-sm btn-danger' onclick='deleteCharge(${c.id},${propertyId})'>Xóa</button></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+async function deleteCharge(id, propertyId) {
+  if (!confirm('Xóa khoản phụ phí này?')) return;
+  await fetch(`/extra_charges/${id}`, {method:'DELETE'});
+  loadCharges(propertyId);
+}
+function showChargeForm(propertyId) {
+  document.getElementById('charge-form-area').innerHTML = `
+    <div class='card mb-3'>
+      <div class='card-header bg-light fw-bold'>Thêm phụ phí cho căn hộ #${propertyId}</div>
+      <div class='card-body'>
+        <form id='extra-charge-form'>
+          <div class='mb-2'><label class='form-label'>Tên khoản phí</label><input type='text' class='form-control' name='charge_name' required></div>
+          <div class='mb-2'><label class='form-label'>Số tiền (VND)</label><input type='number' class='form-control' name='charge_amount' min='0' required></div>
+          <div class='mb-2'><label class='form-label'>Tháng áp dụng</label><input type='month' class='form-control' name='charge_month' required></div>
+          <div class='mb-2'><label class='form-label'>Ghi chú</label><textarea class='form-control' name='charge_note'></textarea></div>
+          <button type='submit' class='btn btn-primary'>Thêm phụ phí</button>
+        </form>
+      </div>
+    </div>
+  `;
+  document.getElementById('extra-charge-form').addEventListener('submit', async function(e){
+    e.preventDefault();
+    const form = e.target;
+    const payload = {
+      property_id: propertyId,
+      charge_name: form.charge_name.value,
+      charge_amount: parseInt(form.charge_amount.value, 10),
+      charge_month: form.charge_month.value,
+      charge_note: form.charge_note.value
+    };
+    await fetch('/extra_charges', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    loadCharges(propertyId);
+    form.reset();
+  });
+}
+document.getElementById('btn-filter').addEventListener('click', ()=>{
+  const propertyId = document.getElementById('filter-property').value;
+  if(propertyId){
+    loadCharges(propertyId);
+    showChargeForm(propertyId);
+  }else{
+    document.getElementById('charges-list').innerHTML = '';
+    document.getElementById('charge-form-area').innerHTML = '';
+  }
+});
+// Refresh dropdowns when the page loads
+loadBuildings();
+loadProperties();
+
+// Update properties when a building is selected
+const buildingDropdown = document.getElementById('filter-building');
+buildingDropdown.addEventListener('change', (e) => {
+  const buildingId = e.target.value;
+  loadProperties(buildingId);
+});
+</script>
+{% endblock %}

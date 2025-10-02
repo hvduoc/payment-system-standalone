@@ -1,0 +1,422 @@
+{% extends "layout.html" %}
+{% block title %}Trang chủ · Upload CSV{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* Lưới gọn cho form tải CSV */
+  .dl-grid{
+    display:grid;
+    grid-template-columns:repeat(12, minmax(0,1fr));
+    gap:12px 16px; align-items:end;
+  }
+  .dl-grid > label{
+    display:flex; flex-direction:column; gap:6px; grid-column:span 6;
+  }
+  @media (min-width:768px){ .dl-grid > label{ grid-column:span 3; } }
+  .dl-grid input[type="number"]{ width:100%; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<h1>Cập nhật dữ liệu từ CSV</h1>
+
+{% if ingest_last or ingest_next %}
+<div class="card" style="margin:10px 0 18px; padding:12px; border:1px solid var(--line);">
+  <div style="font-weight:600; margin-bottom:6px">Trạng thái đồng bộ</div>
+  <div>
+    Lần cập nhật gần nhất:
+    <strong>{{ ingest_last.finished_at | vn_dt if ingest_last else '—' }}</strong>
+    {% if ingest_last %}
+      · <span class="muted">+{{ ingest_last.rows_inserted }} mới, {{ ingest_last.rows_updated }} cập nhật</span>
+    {% endif %}
+  </div>
+  <div>
+    Lần chạy tiếp theo (dự kiến):
+    <strong>
+      {% if ingest_next %}{{ ingest_next.astimezone() | vn_dt }}{% else %}—{% endif %}
+    </strong>
+  </div>
+</div>
+{% endif %}
+
+<p class="muted">Tải file <code>reservations.csv</code> xuất từ Airbnb để cập nhật/đồng bộ dữ liệu.</p>
+
+<!-- ===== TẢI CSV AIRBNB THEO SỐ TRANG ===== -->
+<!-- ===== TẢI CSV TỪ AIRBNB ===== -->
+<h2 style="margin:18px 0 8px; font-size:20px">Tải CSV từ Airbnb</h2>
+
+<form action="/airbnb/csv-link" method="get" target="_blank" class="dl-grid" style="margin-bottom:10px">
+  <label>
+    Trang:
+    <input id="page_single" type="number" name="page" min="1" value="1" required>
+  </label>
+  <label>
+    Mỗi trang:
+    <input id="limit" type="number" name="limit" min="1" max="200" value="40">
+  </label>
+
+  <div style="grid-column:1 / -1; display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+    <button class="btn btn-blue" type="submit">⬇️ Tải 1 trang</button>
+    <button class="btn btn-ghost" type="button" id="btnMany">⬇️ Tải nhiều trang</button>
+    <button class="btn" type="button" id="btnManyZip">⬇️ Tải nhiều (ZIP)</button>
+    <script>
+    document.getElementById('btnManyZip').addEventListener('click', ()=>{
+      const from  = parseInt(document.getElementById('page_from').value || '1', 10);
+      const to    = parseInt(document.getElementById('page_to').value   || String(from), 10);
+      const limit = parseInt(document.getElementById('limit').value     || '40', 10);
+      if (isNaN(from) || isNaN(to) || from < 1 || to < from) { alert('Khoảng trang không hợp lệ'); return; }
+      window.location.href = `/airbnb/csv-batch?page_from=${from}&page_to=${to}&limit=${limit}`;
+    });
+    </script>
+
+
+    <!-- Preview URL để bấm mở trực tiếp -->
+    <span class="muted">| </span>
+    <a id="previewLink" class="nav-link" href="#" target="_blank">Xem URL trang hiện tại</a>
+  </div>
+</form>
+
+<div class="dl-grid" style="margin-top:0">
+  <label>
+    Từ trang:
+    <input id="page_from" type="number" min="1" value="1">
+  </label>
+  <label>
+    Đến trang:
+    <input id="page_to" type="number" min="1" value="5">
+  </label>
+</div>
+
+<p class="muted" style="margin:6px 0 18px">
+  “Tải 1 trang” mở tab mới tới Airbnb để tải (cần đang đăng nhập). “Tải nhiều trang” tải tuần tự bằng iframe ẩn (không bị chặn pop-up).
+</p>
+
+<script>
+(function(){
+  const $ = (id)=>document.getElementById(id);
+
+  // build URL gốc Airbnb (để preview)
+  function buildAirbnbUrl(page, limit){
+    const offset = (page - 1) * limit;
+    const base = "https://www.airbnb.com.vn/api/v2/download_reservations";
+    const params = new URLSearchParams({
+      _format: "for_remy",
+      _limit: String(limit),
+      _offset: String(offset),
+      collection_strategy: "for_reservations_list",
+      sort_field: "start_date",
+      sort_order: "desc",
+      status: "accepted,request,canceled",
+      page: String(page),
+      key: "d306zoyjsyarp7ifhu67rjxn52tv0t20",
+      currency: "VND",
+      locale: "vi",
+    });
+    // giữ dấu phẩy trong 'status'
+    return `${base}?${params.toString().replaceAll('%2C', ',')}`;
+  }
+
+  function updatePreview(){
+    const page  = parseInt($('page_single').value || '1', 10);
+    const limit = parseInt($('limit').value || '40', 10);
+    $('previewLink').href = buildAirbnbUrl(page, limit);
+  }
+  $('page_single').addEventListener('input', updatePreview);
+  $('limit').addEventListener('input', updatePreview);
+  updatePreview();
+
+  // Tải nhiều trang bằng iframe ẩn (không pop-up)
+  $('btnMany').addEventListener('click', function(){
+    const from  = parseInt($('page_from').value || '1', 10);
+    const to    = parseInt($('page_to').value   || String(from), 10);
+    const limit = parseInt($('limit').value     || '40', 10);
+    if (isNaN(from) || isNaN(to) || from < 1 || to < from) {
+      alert('Khoảng trang không hợp lệ'); return;
+    }
+    let iframe = $('dl_iframe');
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'dl_iframe'; iframe.style.display = 'none';
+      document.body.appendChild(iframe);
+    }
+    const delayMs = 1200; // giãn cách cho chắc
+    let p = from;
+    (function next(){
+      if (p > to) return;
+      // dùng route server để redirect (giữ cookie đăng nhập ở domain Airbnb)
+      iframe.src = `/airbnb/csv-link?page=${p}&limit=${limit}`;
+      p += 1;
+      setTimeout(next, delayMs);
+    })();
+  });
+})();
+
+// ===== ROOM MAPPING JAVASCRIPT =====
+const AVAILABLE_PROPERTIES = []; // Will be populated by backend
+
+function loadProperties() {
+  fetch('/api/properties')
+    .then(response => response.json())
+    .then(properties => {
+      AVAILABLE_PROPERTIES.length = 0;
+      properties.forEach(prop => {
+        AVAILABLE_PROPERTIES.push({
+          code: prop.property_short || prop.property_name || `PROP-${prop.id}`,
+          name: prop.property_name,
+          id: prop.id
+        });
+      });
+      updateAllPropertySelects();
+    })
+    .catch(error => console.error('Lỗi tải danh sách phòng:', error));
+}
+
+function updateAllPropertySelects() {
+  document.querySelectorAll('.mapping-rule select').forEach(select => {
+    updatePropertySelect(select);
+  });
+}
+
+function updatePropertySelect(select) {
+  const currentValue = select.value;
+  select.innerHTML = '<option value="">Chọn mã phòng nội bộ</option>';
+  
+  AVAILABLE_PROPERTIES.forEach(prop => {
+    const option = document.createElement('option');
+    option.value = prop.code;
+    option.textContent = `${prop.code} - ${prop.name}`;
+    if (prop.code === currentValue) {
+      option.selected = true;
+    }
+    select.appendChild(option);
+  });
+}
+
+function addMapping() {
+  const container = document.getElementById('room-mapping-container');
+  const newRule = document.createElement('div');
+  newRule.className = 'mapping-rule';
+  newRule.style.cssText = 'display:flex; gap:8px; margin:6px 0; align-items:center';
+  
+  newRule.innerHTML = `
+    <input type="text" placeholder="Tên phòng trong CSV" style="flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:4px">
+    <span>→</span>
+    <select style="flex:0 0 200px; padding:6px 8px; border:1px solid #ddd; border-radius:4px">
+      <option value="">Chọn mã phòng nội bộ</option>
+    </select>
+    <button type="button" class="btn-remove" onclick="removeMapping(this)" style="background:#ff4444; color:white; border:none; padding:4px 8px; border-radius:4px">Xóa</button>
+  `;
+  
+  container.appendChild(newRule);
+  updatePropertySelect(newRule.querySelector('select'));
+}
+
+function removeMapping(btn) {
+  btn.parentElement.remove();
+}
+
+function collectMappingData() {
+  const mappings = {};
+  document.querySelectorAll('.mapping-rule').forEach(rule => {
+    const input = rule.querySelector('input[type="text"]');
+    const select = rule.querySelector('select');
+    if (input.value.trim() && select.value.trim()) {
+      mappings[input.value.trim()] = select.value.trim();
+    }
+  });
+  return mappings;
+}
+
+// Update hidden field before form submission
+document.querySelector('form[action="/upload"]').addEventListener('submit', function(e) {
+  const useMapping = document.getElementById('use_room_mapping').checked;
+  if (useMapping) {
+    const mappingData = collectMappingData();
+    document.getElementById('room_mapping_data').value = JSON.stringify(mappingData);
+  }
+});
+
+// Preview CSV with room mapping
+async function previewCSV() {
+  const filesInput = document.getElementById('csv_files');
+  const useMapping = document.getElementById('use_room_mapping').checked;
+  
+  if (!filesInput.files.length) {
+    alert('Vui lòng chọn ít nhất 1 file CSV');
+    return;
+  }
+  
+  const formData = new FormData();
+  for (let i = 0; i < filesInput.files.length; i++) {
+    formData.append('files', filesInput.files[i]);
+  }
+  
+  if (useMapping) {
+    const mappingData = collectMappingData();
+    formData.append('room_mapping', JSON.stringify(mappingData));
+  }
+  
+  try {
+    showPreviewLoading();
+    
+    const response = await fetch('/api/csv/preview', {
+      method: 'POST',
+      body: formData
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      displayPreviewResults(result.data);
+    } else {
+      alert('Lỗi preview: ' + result.error);
+    }
+    
+    hidePreviewLoading();
+  } catch (error) {
+    hidePreviewLoading();
+    alert('Lỗi kết nối: ' + error.message);
+  }
+}
+
+function showPreviewLoading() {
+  const previewDiv = document.getElementById('csv_preview_results');
+  const contentDiv = document.getElementById('preview_content');
+  
+  contentDiv.innerHTML = '<div style="text-align:center; padding:20px">🔄 Đang xử lý preview...</div>';
+  previewDiv.style.display = 'block';
+}
+
+function hidePreviewLoading() {
+  // Do nothing, keep showing results
+}
+
+function displayPreviewResults(data) {
+  const contentDiv = document.getElementById('preview_content');
+  
+  let html = '';
+  data.forEach((fileData, index) => {
+    html += `<div class="card" style="margin:10px 0; padding:16px; border:1px solid var(--line)">`;
+    html += `<h4>📄 ${fileData.filename}</h4>`;
+    
+    if (fileData.preview && fileData.preview.length > 0) {
+      html += `<table style="width:100%; border-collapse:collapse; margin:10px 0">`;
+      html += `<thead><tr style="background:#f8f9fa">`;
+      html += `<th style="padding:8px; border:1px solid #ddd">Tên phòng gốc</th>`;
+      html += `<th style="padding:8px; border:1px solid #ddd">Tên phòng sau mapping</th>`;
+      html += `<th style="padding:8px; border:1px solid #ddd">Trạng thái</th>`;
+      html += `</tr></thead><tbody>`;
+      
+      fileData.preview.forEach(row => {
+        const statusColor = row.mapped ? 'green' : 'orange';
+        const statusText = row.mapped ? '✅ Đã mapping' : '⚠️ Giữ nguyên';
+        
+        html += `<tr>`;
+        html += `<td style="padding:8px; border:1px solid #ddd">${row.original || '-'}</td>`;
+        html += `<td style="padding:8px; border:1px solid #ddd; font-weight:bold">${row.mapped_name || row.original || '-'}</td>`;
+        html += `<td style="padding:8px; border:1px solid #ddd; color:${statusColor}">${statusText}</td>`;
+        html += `</tr>`;
+      });
+      
+      html += `</tbody></table>`;
+    } else {
+      html += `<p class="muted">Không tìm thấy dữ liệu listing trong file này</p>`;
+    }
+    
+    html += `</div>`;
+  });
+  
+  contentDiv.innerHTML = html;
+}
+
+// Load properties on page load
+document.addEventListener('DOMContentLoaded', function() {
+  loadProperties();
+});
+</script>
+<!-- ===== /TẢI CSV TỪ AIRBNB ===== -->
+
+
+<!-- ===== /TẢI CSV AIRBNB ===== -->
+
+<!-- FORM UPLOAD CSV VỚI ROOM MAPPING -->
+<h2 style="margin:18px 0 8px; font-size:20px">Upload CSV với mapping phòng</h2>
+
+<!-- Room Mapping Configuration -->
+<div class="card" style="margin:10px 0; padding:16px; border:1px solid var(--line); background:#f8f9fa;">
+  <h3 style="margin:0 0 12px; font-size:16px">⚙️ Cấu hình mapping tên phòng</h3>
+  <p class="muted" style="margin:0 0 12px">Định nghĩa tương ứng giữa tên phòng trong CSV Airbnb và mã phòng nội bộ:</p>
+  
+  <div id="room-mapping-container">
+    <div class="mapping-rule" style="display:flex; gap:8px; margin:6px 0; align-items:center">
+      <input type="text" placeholder="Tên phòng trong CSV" style="flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:4px">
+      <span>→</span>
+      <select style="flex:0 0 200px; padding:6px 8px; border:1px solid #ddd; border-radius:4px">
+        <option value="">Chọn mã phòng nội bộ</option>
+        <!-- Will be populated by JavaScript -->
+      </select>
+      <button type="button" class="btn-remove" onclick="removeMapping(this)" style="background:#ff4444; color:white; border:none; padding:4px 8px; border-radius:4px">Xóa</button>
+    </div>
+  </div>
+  
+  <button type="button" onclick="addMapping()" style="margin:8px 0; background:#28a745; color:white; border:none; padding:6px 12px; border-radius:4px">➕ Thêm mapping</button>
+  
+  <div style="margin:12px 0 0">
+    <strong>Mapping mẫu:</strong>
+    <div class="muted" style="font-size:13px; margin:4px 0">
+      • "Deluxe Ocean View" → "AVA-301"<br>
+      • "Standard City View" → "AVA-201"<br>
+      • "Premium Suite 5th Floor" → "AVA-502"
+    </div>
+  </div>
+</div>
+
+<form action="/upload" method="post" enctype="multipart/form-data" style="margin:16px 0;">
+  <div style="display:flex; gap:10px; align-items:center; margin:12px 0">
+    <input type="file" name="files" multiple accept=".csv,text/csv" id="csv_files">
+    <label style="display:flex; align-items:center; gap:6px">
+      <input type="checkbox" name="use_room_mapping" value="1" checked id="use_room_mapping">
+      Áp dụng room mapping
+    </label>
+  </div>
+  
+  <!-- Hidden field to store mapping data -->
+  <input type="hidden" name="room_mapping" id="room_mapping_data">
+  
+  <div style="display:flex; gap:10px; margin:12px 0">
+    <button class="btn btn-blue" type="button" onclick="previewCSV()">👁️ Preview CSV</button>
+    <button class="btn btn-green" type="submit">⬆️ Tải lên & Cập nhật</button>
+  </div>
+</form>
+
+<!-- CSV Preview Results -->
+<div id="csv_preview_results" style="margin:20px 0; display:none">
+  <h3>📋 Preview CSV với Room Mapping</h3>
+  <div id="preview_content"></div>
+</div>
+<p class="muted" style="margin:6px 0">Mẹo: có thể chọn nhiều file CSV một lúc (giữ Ctrl/Shift khi chọn).</p>
+
+
+{% if msg %}
+  <div class="card" style="margin:15px 0; padding:12px; border:1px solid {% if success %}#28a745{% else %}#dc3545{% endif %}; background:{% if success %}#f8fff8{% else %}#fff5f5{% endif %};">
+    <div style="white-space: pre-line;">{{ msg }}</div>
+    {% if upload_stats %}
+      <div style="margin-top:8px; font-size:0.9em; color:#666;">
+        <small>
+          📈 Chi tiết: {{ upload_stats.inserted or 0 }} thêm mới + {{ upload_stats.updated or 0 }} cập nhật
+          {% if upload_stats.processing_time %}
+            | ⚡ {{ "%.2f"|format(upload_stats.processing_time) }}s
+          {% endif %}
+        </small>
+      </div>
+    {% endif %}
+  </div>
+{% endif %}
+
+<p>
+  <a href="/bookings">Xem danh sách đặt phòng</a> ·
+  <a href="/reports/monthly">Báo cáo theo tháng</a>
+</p>
+
+{% endblock %}

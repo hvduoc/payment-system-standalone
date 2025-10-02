@@ -1,0 +1,204 @@
+{% extends "layout.html" %}
+{% block title %}Upload CSV{% endblock %}
+
+{% block content %}
+<h2>📤 Upload CSV Files</h2>
+
+<!-- Room Mapping Configuration -->
+<div class="card" style="margin:10px 0; padding:16px; border:1px solid var(--line); background:#f8f9fa;">
+  <h3 style="margin:0 0 12px; font-size:16px">⚙️ Cấu hình Room Mapping</h3>
+  <p class="muted" style="margin:0 0 12px">Map tên phòng Airbnb với mã phòng nội bộ:</p>
+  
+  <div id="room-mapping-container">
+    <div class="mapping-rule" style="display:flex; gap:8px; margin:6px 0; align-items:center">
+      <input type="text" placeholder="Tên phòng trong CSV" style="flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:4px">
+      <span>→</span>
+      <select style="flex:0 0 200px; padding:6px 8px; border:1px solid #ddd; border-radius:4px">
+        <option value="">Chọn mã phòng...</option>
+      </select>
+      <button type="button" onclick="removeMapping(this)" style="background:#ff4444; color:white; border:none; padding:4px 8px; border-radius:4px">❌</button>
+    </div>
+  </div>
+  
+  <button type="button" onclick="addMapping()" style="margin:8px 0; background:#28a745; color:white; border:none; padding:6px 12px; border-radius:4px">➕ Thêm mapping</button>
+</div>
+
+<!-- Upload Form -->
+<form action="/upload" method="post" enctype="multipart/form-data" style="margin:16px 0;">
+  <div style="display:flex; gap:10px; align-items:center; margin:12px 0">
+    <input type="file" name="files" multiple accept=".csv" id="csv_files" required>
+    <label style="display:flex; align-items:center; gap:6px">
+      <input type="checkbox" name="use_room_mapping" value="1" checked id="use_room_mapping">
+      Áp dụng room mapping
+    </label>
+  </div>
+  
+  <input type="hidden" name="room_mapping" id="room_mapping_data">
+  
+  <div style="display:flex; gap:10px; margin:12px 0">
+    <button class="btn btn-blue" type="button" onclick="previewCSV()">👁️ Preview CSV</button>
+    <button class="btn btn-green" type="submit">⬆️ Upload & Process</button>
+  </div>
+</form>
+
+<!-- Preview Results -->
+<div id="csv_preview_results" style="margin:20px 0; display:none">
+  <h3>📋 Preview Results</h3>
+  <div id="preview_content"></div>
+</div>
+
+{% if msg %}
+  {% if success %}
+    <div class="alert" style="padding:12px; margin:10px 0; background:#d4edda; color:#155724;">
+      {{ msg }}
+    </div>
+  {% else %}
+    <div class="alert" style="padding:12px; margin:10px 0; background:#f8d7da; color:#721c24;">
+      {{ msg }}
+    </div>
+  {% endif %}
+{% endif %}
+
+<script>
+let properties = [];
+
+async function loadProperties() {
+  try {
+    const response = await fetch('/api/properties');
+    properties = await response.json();
+    updatePropertySelects();
+  } catch (error) {
+    console.error('Failed to load properties:', error);
+  }
+}
+
+function updatePropertySelects() {
+  const selects = document.querySelectorAll('#room-mapping-container select');
+  selects.forEach(select => {
+    select.innerHTML = '<option value="">Chọn mã phòng...</option>';
+    properties.forEach(prop => {
+      const option = document.createElement('option');
+      option.value = prop.name;
+      option.textContent = prop.name;
+      select.appendChild(option);
+    });
+  });
+}
+
+function addMapping() {
+  const container = document.getElementById('room-mapping-container');
+  const newRule = document.createElement('div');
+  newRule.className = 'mapping-rule';
+  newRule.style.cssText = 'display:flex; gap:8px; margin:6px 0; align-items:center';
+  
+  newRule.innerHTML = `
+    <input type="text" placeholder="Tên phòng trong CSV" style="flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:4px">
+    <span>→</span>
+    <select style="flex:0 0 200px; padding:6px 8px; border:1px solid #ddd; border-radius:4px">
+      <option value="">Chọn mã phòng...</option>
+    </select>
+    <button type="button" onclick="removeMapping(this)" style="background:#ff4444; color:white; border:none; padding:4px 8px; border-radius:4px">❌</button>
+  `;
+  
+  container.appendChild(newRule);
+  updatePropertySelects();
+}
+
+function removeMapping(button) {
+  button.parentElement.remove();
+}
+
+function collectMappingData() {
+  const rules = document.querySelectorAll('.mapping-rule');
+  const mappings = {};
+  
+  rules.forEach(rule => {
+    const input = rule.querySelector('input[type="text"]');
+    const select = rule.querySelector('select');
+    
+    if (input.value.trim() && select.value) {
+      mappings[input.value.trim()] = select.value;
+    }
+  });
+  
+  return { mappings };
+}
+
+async function previewCSV() {
+  const filesInput = document.getElementById('csv_files');
+  if (!filesInput.files.length) {
+    alert('Vui lòng chọn file CSV');
+    return;
+  }
+  
+  const formData = new FormData();
+  for (let file of filesInput.files) {
+    formData.append('files', file);
+  }
+  
+  const mappingData = collectMappingData();
+  formData.append('room_mapping', JSON.stringify(mappingData));
+  
+  try {
+    document.getElementById('preview_content').innerHTML = '<p>🔄 Đang xử lý...</p>';
+    document.getElementById('csv_preview_results').style.display = 'block';
+    
+    const response = await fetch('/api/csv/preview', {
+      method: 'POST',
+      body: formData
+    });
+    
+    const result = await response.json();
+    if (result.success) {
+      displayPreview(result.data);
+    } else {
+      alert('Lỗi preview: ' + result.error);
+    }
+  } catch (error) {
+    alert('Lỗi: ' + error.message);
+  }
+}
+
+function displayPreview(data) {
+  let html = '';
+  data.forEach(fileData => {
+    html += `<div class="card" style="margin:10px 0; padding:16px;">`;
+    html += `<h4>📄 ${fileData.filename}</h4>`;
+    
+    if (fileData.preview && fileData.preview.length > 0) {
+      html += `<table style="width:100%; border-collapse:collapse;">`;
+      html += `<tr><th style="padding:8px; border:1px solid #ddd;">Original</th><th style="padding:8px; border:1px solid #ddd;">Mapped</th><th style="padding:8px; border:1px solid #ddd;">Status</th></tr>`;
+      
+      fileData.preview.forEach(row => {
+        const status = row.mapped ? '✅ Mapped' : '⚠️ No change';
+        html += `<tr>`;
+        html += `<td style="padding:8px; border:1px solid #ddd;">${row.original || '-'}</td>`;
+        html += `<td style="padding:8px; border:1px solid #ddd;">${row.mapped_name || row.original || '-'}</td>`;
+        html += `<td style="padding:8px; border:1px solid #ddd;">${status}</td>`;
+        html += `</tr>`;
+      });
+      
+      html += `</table>`;
+    } else {
+      html += `<p class="muted">Không tìm thấy dữ liệu listing trong file</p>`;
+    }
+    
+    html += `</div>`;
+  });
+  
+  document.getElementById('preview_content').innerHTML = html;
+}
+
+// Form submission
+document.querySelector('form[action="/upload"]').addEventListener('submit', function(e) {
+  const useMapping = document.getElementById('use_room_mapping').checked;
+  if (useMapping) {
+    const mappingData = collectMappingData();
+    document.getElementById('room_mapping_data').value = JSON.stringify(mappingData);
+  }
+});
+
+// Load properties on page load
+document.addEventListener('DOMContentLoaded', loadProperties);
+</script>
+{% endblock %}

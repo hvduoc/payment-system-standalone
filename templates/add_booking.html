@@ -1,0 +1,75 @@
+{% extends "layout.html" %}
+{% block content %}
+
+<h1>Thêm Booking Offline</h1>
+
+<form method="post" action="/bookings/new" class="form-grid">
+  <div class="mb-3">
+    <label for="property_id">Căn hộ</label>
+    <select class="form-select" name="property_id" required>
+      {% for p in properties %}
+        <option value="{{ p.id }}">{{ p.property_short or p.property_name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="mb-3">
+    <label for="start_date">Ngày bắt đầu</label>
+    <input type="date" class="form-control" name="start_date" required>
+  </div>
+
+  <div class="mb-3">
+    <label for="end_date">Ngày kết thúc</label>
+    <input type="date" class="form-control" name="end_date" required>
+  </div>
+
+  <div class="mb-3">
+    <label for="total_payout_vnd">Doanh thu (VND)</label>
+    <input type="number" class="form-control" name="total_payout_vnd" required>
+  </div>
+
+  <div class="mb-3">
+    <label for="channel_id">Kênh</label>
+    <select name="channel_id" class="form-select">
+      {% for ch in channels %}
+        <option value="{{ ch.id }}" {% if ch.id == default_channel_id %}selected{% endif %}>{{ ch.channel_name }}</option>
+      {% endfor %}
+    </select>
+
+  </div>
+
+  <div class="mb-3">
+    <label for="guest_name">Tên khách</label>
+    <input type="text" class="form-control" name="guest_name">
+  </div>
+
+  <div class="mb-3">
+    <label for="guest_contact">Liên hệ khách</label>
+    <input type="text" class="form-control" name="guest_contact">
+  </div>
+
+  <div class="mb-3">
+    <label for="confirmation_code">Mã xác nhận (nếu có)</label>
+    <input type="text" class="form-control" name="confirmation_code">
+  </div>
+
+  <div class="mb-3">
+    <label for="salesperson_id">Nhân viên sale</label>
+    <select name="salesperson_id">
+      <option value="">-- Không chọn --</option>
+      {% for s in salespeople %}
+        <option value="{{ s.id }}">{{ s.name }}</option>
+      {% endfor %}
+    </select>
+
+  </div>
+
+  <div class="mb-3">
+    <label for="notes">Ghi chú</label>
+    <textarea class="form-control" name="notes" rows="3"></textarea>
+  </div>
+
+  <button type="submit" class="btn btn-primary">Lưu Booking</button>
+</form>
+
+{% endblock %}

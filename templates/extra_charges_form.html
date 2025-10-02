@@ -1,0 +1,70 @@
+<!-- extra_charges_form.html: Mẫu form nhập các khoản phụ phí cho căn hộ -->
+<div class="card mb-3">
+  <div class="card-header bg-light fw-bold">Thêm phụ phí cho căn hộ</div>
+  <div class="card-body">
+    <form id="extra-charge-form">
+      <div class="mb-2">
+        <label class="form-label">Tên khoản phí</label>
+        <input type="text" class="form-control" name="charge_name" placeholder="Nhập tên khoản phí (ví dụ: phí dọn phòng, phí dịch vụ...)" required>
+      </div>
+      <div class="mb-2">
+        <label class="form-label">Số tiền (VND)</label>
+        <input type="number" class="form-control" name="charge_amount" min="0" required>
+      </div>
+      <div class="mb-2">
+        <label class="form-label">Tháng áp dụng</label>
+        <input type="month" class="form-control" name="charge_month" required>
+      </div>
+      <div class="mb-2">
+        <label class="form-label">Ghi chú</label>
+        <textarea class="form-control" name="charge_note" rows="2"></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary">Thêm phụ phí</button>
+    </form>
+  </div>
+</div>
+<script>
+// Lấy property_id từ URL (nếu có)
+function getPropertyIdFromURL() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('property_id');
+}
+
+// Xử lý submit form phụ phí
+const form = document.getElementById('extra-charge-form');
+form?.addEventListener('submit', async function(e) {
+  e.preventDefault();
+
+  const propertyId = getPropertyIdFromURL();
+  if (!propertyId) {
+    alert('Không tìm thấy property_id. Vui lòng kiểm tra URL.');
+    return;
+  }
+
+  const payload = {
+    property_id: parseInt(propertyId, 10),
+    charge_name: form.charge_name.value,
+    charge_amount: parseInt(form.charge_amount.value, 10),
+    charge_month: form.charge_month.value,
+    charge_note: form.charge_note.value
+  };
+
+  try {
+    const response = await fetch('/extra_charges', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (response.ok) {
+      alert('Thêm phụ phí thành công!');
+      form.reset();
+    } else {
+      const error = await response.json();
+      alert(`Lỗi: ${error.detail || 'Không thể thêm phụ phí'}`);
+    }
+  } catch (err) {
+    alert(`Lỗi kết nối: ${err.message}`);
+  }
+});
+</script>

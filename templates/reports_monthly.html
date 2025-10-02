@@ -1,0 +1,495 @@
+{% extends "layout.html" %}
+{% block content %}
+<style>
+/* --- Dashboard layout & components (final) --- */
+
+/* Grid 12 cột ổn định */
+.report-grid{
+  display:grid;
+  grid-template-columns:repeat(12, minmax(0,1fr));
+  gap:24px;
+}
+
+/* Mobile: mỗi khối chiếm full chiều ngang */
+.main-content,.sidebar{ grid-column:1 / -1; }
+
+/* Desktop: 8/12 + 4/12, sidebar sticky gọn gàng */
+@media (min-width:1024px){
+  .main-content{ grid-column:1 / 9; }
+  .sidebar{ grid-column:9 / 13; position:sticky; top:16px; align-self:start; }
+}
+
+/* ------- Filters ------- */
+.filter-card{
+  padding:12px 16px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:#fff;
+}
+.filter-grid{
+  display:grid;
+  grid-template-columns:repeat(12, minmax(0,1fr));
+  gap:12px 16px;
+  align-items:end;
+}
+.filter-grid > label{
+  display:flex; flex-direction:column; gap:6px;
+  grid-column:span 12;
+}
+@media (min-width:768px){
+  .filter-grid > label{ grid-column:span 3; }
+}
+.filter-grid input[type="date"], .filter-grid select{ width:100%; }
+.filter-footer{ grid-column:1 / -1; }
+
+/* ------- KPI cards ------- */
+.kpi-grid{
+  display:grid;
+  grid-template-columns:repeat(12, minmax(0,1fr));
+  gap:16px; margin-bottom:24px;
+}
+.kpi-card{ grid-column: span 6; }         /* 2 cột trên mobile */
+@media (min-width:768px){ .kpi-card{ grid-column: span 3; } }  /* 4 thẻ / hàng trên desktop */
+
+.kpi-card .label{ color:var(--muted); font-size:14px; margin-bottom:4px; }
+.kpi-card .value{ font-weight:700; font-size:24px; color:var(--fg); }
+
+/* ------- Chart card ------- */
+.chart-card{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:20px;
+  margin-bottom:24px;
+  position:relative;
+  overflow:hidden;
+}
+.chart-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-bottom:16px;
+}
+.chart-title{ font-weight:600; font-size:18px; white-space:nowrap; }
+.chart-toggle{ display:flex; gap:8px; flex-wrap:wrap; margin-left:auto; }
+.chart-toggle .btn{ background:#f3f4f6; color:var(--muted); padding:6px 10px; font-size:13px; }
+.chart-toggle .btn.active{ background:#3b82f6; color:#fff; }
+
+/* Canvas wrappers để ngăn vòng lặp resize */
+.chart-body{ position:relative; height:320px; }
+.chart-body--sm{ height:260px; }        /* dùng cho pie chart ở sidebar */
+.chart-body canvas{
+  position:absolute; inset:0;
+  width:100% !important;
+  height:100% !important;
+}
+
+/* ------- Map (Leaflet) ------- */
+#performanceMap{
+  height:450px;
+  width:100%;
+  max-height:500px;
+  border-radius:8px;
+  z-index:1;
+  position:relative;
+  overflow:hidden;
+}
+/* Trong Leaflet, chính #performanceMap là .leaflet-container */
+#performanceMap.leaflet-container{ height:100%; }
+
+/* ------- Sidebar: Pie + Glossary ------- */
+.sidebar .chart-card .chart-title{ text-align:center; }
+.glossary-card{
+  background:#fff;
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:16px;
+  max-height:420px;
+  overflow:auto;
+}
+.glossary-card dt{ font-weight:600; color:var(--fg); margin-top:8px; }
+.glossary-card dd{
+  color:var(--muted); font-size:14px; margin-left:0;
+  margin-bottom:10px; padding-bottom:10px;
+  border-bottom:1px dashed var(--line);
+}
+.glossary-card dd:last-of-type{ border-bottom:none; margin-bottom:0; padding-bottom:0; }
+
+/* ------- Table compact + Pager ------- */
+.booking-table.compact th,
+.booking-table.compact td{
+  padding:6px 10px;
+  font-size:13px;
+  line-height:1.25;
+}
+.booking-table.compact thead th{ position:sticky; top:0; z-index:1; }
+@media (max-width: 900px){
+  .col-adr, .col-revpar { display:none; }
+}
+.pager { display:flex; gap:8px; align-items:center; justify-content:flex-end; margin-top:12px; flex-wrap:wrap; }
+.pager .btn { padding:6px 10px; border:1px solid var(--line); background:#fff; border-radius:8px; }
+.pager .btn[disabled] { opacity:.5; cursor:not-allowed; }
+.pager .btn.active { background:#0b57d0; color:#fff; border-color:#0b57d0; }
+.pager .info { margin-right:auto; color:var(--muted); }
+
+/* Pager buttons: hiện chữ + vô hiệu hóa đúng cách */
+.pager .btn{
+  padding:6px 10px;
+  border:1px solid var(--line);
+  background:#fff;
+  border-radius:8px;
+  color: var(--fg);              /* <-- thêm dòng này để chữ hiện ra */
+  text-decoration: none;         /* cho anchor trông như button */
+}
+.pager .btn[disabled]{
+  opacity:.5;
+  cursor:not-allowed;
+  pointer-events: none;          /* <-- tránh click khi 'disabled' là <a> */
+}
+.pager .btn.active{
+  background:#0b57d0;
+  color:#fff;
+  border-color:#0b57d0;
+}
+
+</style>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+
+<div class="page-header">
+  <h1>Bảng điều khiển theo tháng</h1>
+  <div class="header-actions">
+    <a href="/reports/monthly/export?start={{ start if start else '' }}&end={{ end if end else '' }}&group_by={{ group_by }}&fmt=xlsx" class="btn btn-green">📄 Xuất Excel</a>
+  </div>
+</div>
+
+<div class="filter-card" style="margin-bottom: 24px;">
+  <form method="get" action="/reports/monthly" class="filter-grid">
+    <label>Từ:
+      <input type="date" name="start" value="{{ start if start else '' }}">
+    </label>
+    <label>Đến:
+      <input type="date" name="end" value="{{ end if end else '' }}">
+    </label>
+    <label>Nhóm theo:      
+      <select name="group_by" class="form-select">
+        <option value="property" {% if group_by == 'property' %}selected{% endif %}>Căn hộ</option>
+        <option value="building" {% if group_by == 'building' %}selected{% endif %}>Tòa nhà</option>
+        <option value="channel" {% if group_by == 'channel' %}selected{% endif %}>Kênh</option>
+        <option value="salesperson" {% if group_by == 'salesperson' %}selected{% endif %}>Nhân viên Sale</option>
+      </select>
+
+
+    </label>
+    <!-- Hàng/trang (mặc định 20 nếu pagination chưa được truyền) -->
+    <label>Hàng/trang:
+      <select name="page_size" onchange="this.form.submit()">
+        {% set _psize = (pagination.page_size if pagination else 22) %}
+        {% for n in [10,20,30,50,100] %}
+          <option value="{{n}}" {{ 'selected' if _psize==n else '' }}>{{n}}</option>
+        {% endfor %}
+      </select>
+      <!-- đổi kích thước trang thì về trang 1 -->
+      <input type="hidden" name="p" value="1">
+    </label>
+
+    <div class="filter-footer" style="grid-column: 1 / -1;">
+      <button class="btn btn-blue" type="submit">🔍 Xem báo cáo</button>
+    </div>
+  </form>
+</div>
+
+<div class="report-grid">
+  <div class="main-content">
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="label">Doanh thu</div>
+        <div class="value">{{ totals.revenue_vnd | vnd }}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Đêm bán</div>
+        <div class="value">{{ totals.sold_nights }}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Đêm trống</div>
+        <div class="value">{{ totals.vacant_nights }}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">Dự báo Doanh thu</div>
+        <div class="value">{{ totals.forecast_revenue_vnd | vnd }}</div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="label">Tỷ lệ lấp đầy</div>
+        <div class="value">{{ "%.1f"|format(totals.occupancy_pct) }}%</div>
+      </div>
+      <div class="kpi-card">
+        <div class="label">RevPAR</div>
+        <div class="value">{{ totals.revpar_vnd | vnd }}</div>
+      </div>
+    </div>
+
+    {% if geo_data %}
+    <div class="chart-card">
+      <div class="chart-header">
+        <h2 class="chart-title">Bản đồ Hiệu suất Kinh doanh</h2>
+      </div>
+      <div id="performanceMap"></div>
+    </div>
+    {% endif %}
+
+    <div class="chart-card">
+      <div class="chart-header">
+        <div class="chart-title">Xu hướng theo thời gian</div>
+        <div class="chart-toggle" id="chartToggle">
+          <button class="btn active" data-metric="revenue">Doanh thu</button>
+          <button class="btn" data-metric="nights">Đêm bán</button>
+          <button class="btn" data-metric="occ">Lấp đầy</button>
+        </div>
+      </div>
+      <div class="chart-body">
+        <canvas id="mainTrendChart"></canvas>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table class="booking-table compact">
+        <thead>
+          <tr>
+            <th>Tháng</th>
+            <th>Nhóm</th>
+            <th class="num">Đêm bán</th>
+            <th class="num">Đêm trống</th>
+            <th class="num">Doanh thu</th>
+            <th class="num col-adr">ADR</th>
+            <th class="num col-revpar">RevPAR</th>
+            {% if group_by == 'salesperson' %}<th class="num">Hoa hồng</th>{% endif %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>{{ row.month | vn_month }}</td>
+            <td>{{ row.group }}</td>
+            <td class="num">{{ row.sold_nights }}</td>
+            <td class="num">{{ row.vacant_nights }}</td>
+            <td class="num">{{ row.revenue_vnd | vnd }}</td>
+            <td class="num col-adr">{{ row.adr_vnd | vnd }}</td>
+            <td class="num col-revpar">{{ row.revpar_vnd | vnd }}</td>
+            {% if group_by == 'salesperson' %}<td class="num">{{ row.commission_vnd | vnd }}</td>{% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+      {% if pagination %}
+        {% set base = '/reports/monthly?start=' ~ (start if start else '') 
+                      ~ '&end=' ~ (end if end else '') 
+                      ~ '&group_by=' ~ group_by 
+                      ~ '&page_size=' ~ pagination.page_size %}
+        <div class="pager">
+          <div class="info">
+            Kết quả: {{ pagination.start }}–{{ pagination.end }} / {{ pagination.total }}
+          </div>
+
+          <a class="btn" href="{{ base ~ '&p=1' }}" {{ 'disabled' if pagination.page==1 else '' }}>« Đầu</a>
+          <a class="btn" href="{{ base ~ '&p=' ~ (pagination.page-1) }}" {{ 'disabled' if pagination.page==1 else '' }}>‹ Trước</a>
+
+          {% set from = [1, pagination.page-2]|max %}
+          {% set to = [pagination.pages, pagination.page+2]|min %}
+          {% for i in range(from, to+1) %}
+            <a class="btn {{ 'active' if i==pagination.page else '' }}" href="{{ base ~ '&p=' ~ i }}">{{ i }}</a>
+          {% endfor %}
+
+          <a class="btn" href="{{ base ~ '&p=' ~ (pagination.page+1) }}" {{ 'disabled' if pagination.page==pagination.pages else '' }}>Sau ›</a>
+          <a class="btn" href="{{ base ~ '&p=' ~ pagination.pages }}" {{ 'disabled' if pagination.page==pagination.pages else '' }}>Cuối »</a>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="sidebar">
+    <div class="chart-card">
+      <div class="chart-title">Phân bổ Doanh thu theo Kênh</div>
+      <div class="chart-body chart-body--sm">
+        <canvas id="channelPieChart"></canvas>
+      </div>
+    </div>
+
+    <div class="glossary-card">
+      <dl>
+        <dt>KPI (Key Performance Indicator)</dt>
+        <dd>Chỉ số Hiệu suất Chính - Các số liệu quan trọng dùng để đo lường hiệu quả kinh doanh.</dd>
+        <dt>ADR (Average Daily Rate)</dt>
+        <dd>Giá phòng trung bình mỗi đêm bán được. (Doanh thu / Đêm bán)</dd>
+        <dt>RevPAR (Revenue Per Available Room)</dt>
+        <dd>Doanh thu trên mỗi phòng có sẵn. (Doanh thu / Đêm khả dụng)</dd>
+      </dl>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+const chartData = {{ chart|tojson }};
+const geoData = {{ geo_data|tojson|default('[]') }};
+
+
+// --- Map ---
+if (geoData && geoData.length > 0) {
+const mapCenter = [16.0544, 108.2022];
+const map = L.map('performanceMap').setView(mapCenter, 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+}).addTo(map);
+const formatVND = (v) => new Intl.NumberFormat('vi-VN',{style:'currency',currency:'VND'}).format(v);
+geoData.forEach(point => {
+const html = `<b>${point.name}</b><br>Doanh thu: ${formatVND(point.revenue)}<br>Đêm bán: ${point.sold_nights}`;
+L.marker([point.lat, point.lng]).addTo(map).bindPopup(html);
+});
+}
+
+
+// --- Trend chart ---
+// --- Trend chart ---
+const ctxTrend = document.getElementById('mainTrendChart').getContext('2d');
+let trendChart;
+
+function createTrendChart(metric) {
+  let datasets = [];
+  let yAxisFormatter = value => value;
+
+  if (metric === "revenue") {
+    datasets = [
+      {
+        label: "Tổng Doanh thu",
+        data: chartData.revenue_by_month,
+        borderColor: "#10b981",
+        backgroundColor: "rgba(16,185,129,0.1)",
+        fill: true,
+        tension: 0.3
+      },
+      {
+        label: "Airbnb",
+        data: chartData.airbnb_revenue_by_month,
+        borderColor: "#3b82f6",
+        backgroundColor: "rgba(59,130,246,0.1)",
+        fill: false,
+        tension: 0.3
+      },
+      {
+        label: "Offline",
+        data: chartData.offline_revenue_by_month,
+        borderColor: "#ef4444",
+        backgroundColor: "rgba(239,68,68,0.1)",
+        fill: false,
+        tension: 0.3
+      }
+    ];
+    yAxisFormatter = v => new Intl.NumberFormat('vi-VN').format(v);
+  }
+
+  if (metric === "nights") {
+    datasets = [{
+      label: "Đêm bán",
+      data: chartData.sold_nights_by_month,
+      borderColor: "#10b981",
+      backgroundColor: "rgba(16,185,129,0.1)",
+      fill: true,
+      tension: 0.3
+    }];
+  }
+
+  if (metric === "occ") {
+    datasets = [{
+      label: "Tỷ lệ lấp đầy (%)",
+      data: chartData.occupancy_pct_by_month,
+      borderColor: "#10b981",
+      backgroundColor: "rgba(16,185,129,0.1)",
+      fill: true,
+      tension: 0.3
+    }];
+    yAxisFormatter = v => v + " %";
+  }
+
+  if (trendChart) trendChart.destroy(); // Xoá biểu đồ cũ nếu có
+
+  trendChart = new Chart(ctxTrend, {
+    type: "line",
+    data: {
+      labels: chartData.month_labels,
+      datasets: datasets
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: {
+          ticks: {
+            callback: yAxisFormatter
+          }
+        }
+      }
+    }
+  });
+}
+
+// Khởi tạo mặc định với Doanh thu
+createTrendChart("revenue");
+
+// --- Toggle metric ---
+document.querySelectorAll("#chartToggle .btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#chartToggle .btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const metric = btn.dataset.metric;
+    createTrendChart(metric);
+  });
+});
+
+
+// --- Channel pie chart ---
+const ctxPie = document.getElementById('channelPieChart');
+if (ctxPie) {
+    const pieChart = new Chart(ctxPie.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: chartData.channel_labels,
+            datasets: [{ 
+                data: chartData.channel_revenue,
+                backgroundColor: ['#3b82f6', '#ef4444', '#10b981', '#f59e0b'],
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { 
+                legend: { position: 'bottom' }
+            }
+        }
+    });
+}
+
+
+// --- Toggle metric ---
+document.querySelectorAll('#chartToggle .btn').forEach(btn=>{
+btn.addEventListener('click', ()=>{
+document.querySelectorAll('#chartToggle .btn').forEach(b=>b.classList.remove('active'));
+btn.classList.add('active');
+const metric = btn.dataset.metric;
+let data = chartData.revenue_by_month, label='Doanh thu';
+if (metric==='nights'){ data = chartData.sold_nights_by_month; label='Đêm bán'; }
+if (metric==='occ'){ data = chartData.occupancy_pct_by_month; label='Tỷ lệ lấp đầy (%)'; }
+trendChart.data.datasets[0].data = data;
+trendChart.data.datasets[0].label = label;
+trendChart.update();
+});
+});
+});
+</script>
+{% endblock %}

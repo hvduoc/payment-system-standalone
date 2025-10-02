@@ -1,0 +1,43 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-4">Quản lý Tòa nhà</h2>
+  <form method="post" action="/buildings/new" class="row g-3 mb-4">
+    <div class="col-md-4">
+      <input type="text" name="building_name" class="form-control" placeholder="Tên tòa nhà" required>
+    </div>
+    <div class="col-md-3">
+      <input type="text" name="building_code" class="form-control" placeholder="Mã tòa nhà (tuý chọn)">
+    </div>
+    <div class="col-md-3">
+      <input type="text" name="address" class="form-control" placeholder="Địa chỉ (tuý chọn)">
+    </div>
+    <div class="col-md-2">
+      <button type="submit" class="btn btn-primary w-100">Thêm tòa</button>
+    </div>
+  </form>
+
+  <table class="table table-bordered table-hover">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Tên tòa nhà</th>
+        <th>Mã</th>
+        <th>Địa chỉ</th>
+        <th>Số căn hộ</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in buildings %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ b.building_name }}</td>
+        <td>{{ b.building_code or "-" }}</td>
+        <td>{{ b.address or "-" }}</td>
+        <td>{{ b.num_properties or 0 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

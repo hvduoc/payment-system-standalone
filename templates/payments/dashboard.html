@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Ledger - Sổ thu chi</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+    <!-- Header -->
+    <header class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <h1 class="text-xl font-semibold text-gray-900">
+                        <i class="fas fa-money-bill-wave text-green-600 mr-2"></i>
+                        Payment Ledger
+                    </h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm text-gray-500" id="currentUser">Loading...</span>
+                    <button onclick="logout()" class="text-sm text-red-600 hover:text-red-800">
+                        <i class="fas fa-sign-out-alt mr-1"></i>Đăng xuất
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Navigation Tabs -->
+        <div class="border-b border-gray-200 mb-8">
+            <nav class="-mb-px flex space-x-8">
+                <button onclick="showTab('dashboard')" 
+                        class="tab-btn py-2 px-1 border-b-2 font-medium text-sm"
+                        data-tab="dashboard">
+                    <i class="fas fa-chart-dashboard mr-2"></i>Dashboard
+                </button>
+                <button onclick="showTab('add-payment')" 
+                        class="tab-btn py-2 px-1 border-b-2 font-medium text-sm"
+                        data-tab="add-payment">
+                    <i class="fas fa-plus-circle mr-2"></i>Nhập thu
+                </button>
+                <button onclick="showTab('payments-list')" 
+                        class="tab-btn py-2 px-1 border-b-2 font-medium text-sm"
+                        data-tab="payments-list">
+                    <i class="fas fa-list mr-2"></i>Lịch sử thu
+                </button>
+                <button onclick="showTab('cash-handover')" 
+                        class="tab-btn py-2 px-1 border-b-2 font-medium text-sm"
+                        data-tab="cash-handover" id="cashHandoverTab">
+                    <i class="fas fa-exchange-alt mr-2"></i>Bàn giao tiền
+                </button>
+            </nav>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboard-tab" class="tab-content">
+            <!-- KPI Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-green-100 rounded-lg">
+                            <i class="fas fa-money-bill text-green-600 text-xl"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-500">Tổng thu</p>
+                            <p class="text-2xl font-semibold text-gray-900" id="totalCollected">-</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-blue-100 rounded-lg">
+                            <i class="fas fa-percentage text-blue-600 text-xl"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-500">Tỷ lệ thu</p>
+                            <p class="text-2xl font-semibold text-gray-900" id="collectionRate">-</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-yellow-100 rounded-lg">
+                            <i class="fas fa-wallet text-yellow-600 text-xl"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-500">Tồn quỹ</p>
+                            <p class="text-2xl font-semibold text-gray-900" id="cashBalance">-</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-purple-100 rounded-lg">
+                            <i class="fas fa-receipt text-purple-600 text-xl"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-500">Số giao dịch</p>
+                            <p class="text-2xl font-semibold text-gray-900" id="totalPayments">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Doanh thu theo tháng</h3>
+                    <canvas id="revenueChart"></canvas>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Hiệu quả thu tiền</h3>
+                    <canvas id="collectorChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Payment Tab -->
+        <div id="add-payment-tab" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-semibold mb-6">Nhập phiếu thu</h2>
+                <form id="paymentForm" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Booking ID <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" id="bookingId" required
+                                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Tên khách <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" id="guestName" required
+                                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Số tiền phải thu (VND) <span class="text-red-500">*</span>
+                            </label>
+                            <input type="number" id="amountDue" required min="0"
+                                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Số tiền thu được (VND) <span class="text-red-500">*</span>
+                            </label>
+                            <input type="number" id="amountCollected" required min="0"
+                                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Phương thức thanh toán <span class="text-red-500">*</span>
+                            </label>
+                            <select id="paymentMethod" required
+                                    class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">Chọn phương thức</option>
+                                <option value="cash">Tiền mặt</option>
+                                <option value="bank_transfer">Chuyển khoản</option>
+                                <option value="airbnb_payout">Airbnb Payout</option>
+                                <option value="momo">MoMo</option>
+                                <option value="zalopay">ZaloPay</option>
+                                <option value="vietqr">VietQR</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Người thu <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" id="collectedBy" required
+                                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Mã giao dịch
+                            </label>
+                            <input type="text" id="transactionId"
+                                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Ghi chú
+                            </label>
+                            <textarea id="notes" rows="3"
+                                      class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-4">
+                        <button type="button" onclick="resetPaymentForm()"
+                                class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                            Hủy
+                        </button>
+                        <button type="submit"
+                                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                            <i class="fas fa-save mr-2"></i>Lưu phiếu thu
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Payments List Tab -->
+        <div id="payments-list-tab" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow">
+                <div class="p-6 border-b border-gray-200">
+                    <h2 class="text-xl font-semibold mb-4">Lịch sử thu tiền</h2>
+                    
+                    <!-- Filters -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Từ ngày</label>
+                            <input type="date" id="startDate" 
+                                   class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Đến ngày</label>
+                            <input type="date" id="endDate"
+                                   class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Người thu</label>
+                            <select id="collectorFilter"
+                                    class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm">
+                                <option value="">Tất cả</option>
+                            </select>
+                        </div>
+                        <div class="flex items-end">
+                            <button onclick="loadPayments()" 
+                                    class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm">
+                                <i class="fas fa-search mr-2"></i>Tìm kiếm
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Thời gian</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Booking ID</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Khách hàng</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phải thu</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Đã thu</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phương thức</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Người thu</th>
+                            </tr>
+                        </thead>
+                        <tbody id="paymentsTableBody" class="bg-white divide-y divide-gray-200">
+                            <!-- Data will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cash Handover Tab -->
+        <div id="cash-handover-tab" class="tab-content hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- Handover Form -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-xl font-semibold mb-6">Bàn giao tiền mặt</h2>
+                    <form id="handoverForm" class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Từ <span class="text-red-500">*</span>
+                            </label>
+                            <select id="fromPerson" required
+                                    class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">Chọn người bàn giao</option>
+                                <option value="assistant">Trợ lý</option>
+                                <option value="manager">Quản lý</option>
+                                <option value="owner">Chủ</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Đến <span class="text-red-500">*</span>
+                            </label>
+                            <select id="toPerson" required
+                                    class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">Chọn người nhận</option>
+                                <option value="assistant">Trợ lý</option>
+                                <option value="manager">Quản lý</option>
+                                <option value="owner">Chủ</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Số tiền (VND) <span class="text-red-500">*</span>
+                            </label>
+                            <input type="number" id="handoverAmount" required min="0"
+                                   class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Mô tả <span class="text-red-500">*</span>
+                            </label>
+                            <textarea id="handoverDescription" required rows="3"
+                                      class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                        </div>
+                        
+                        <button type="submit"
+                                class="w-full px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+                            <i class="fas fa-exchange-alt mr-2"></i>Xác nhận bàn giao
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- Cashflow History -->
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-xl font-semibold mb-6">Lịch sử dòng tiền</h2>
+                    <div id="cashflowList" class="space-y-4">
+                        <!-- Cashflow items will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast" class="fixed top-4 right-4 z-50 hidden">
+        <div class="bg-white border border-gray-200 rounded-lg shadow-lg p-4 max-w-sm">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <i id="toastIcon" class="text-xl"></i>
+                </div>
+                <div class="ml-3">
+                    <p id="toastMessage" class="text-sm font-medium text-gray-900"></p>
+                </div>
+                <div class="ml-auto pl-3">
+                    <button onclick="hideToast()" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let currentUser = null;
+        let accessToken = localStorage.getItem('access_token');
+        
+        // API Configuration
+        const API_BASE = '/api';
+        
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!accessToken) {
+                // Redirect to login if no token
+                window.location.href = '/login';
+                return;
+            }
+            
+            initializeApp();
+        });
+        
+        async function initializeApp() {
+            try {
+                // Get current user info
+                const userResponse = await apiCall('/auth/me');
+                currentUser = userResponse.data;
+                
+                document.getElementById('currentUser').textContent = 
+                    `${currentUser.full_name} (${currentUser.role})`;
+                
+                // Hide cash handover tab for assistants
+                if (currentUser.role === 'assistant') {
+                    document.getElementById('cashHandoverTab').style.display = 'none';
+                }
+                
+                // Load initial data
+                await loadDashboard();
+                showTab('dashboard');
+                
+            } catch (error) {
+                console.error('Failed to initialize app:', error);
+                if (error.response?.status === 401) {
+                    logout();
+                }
+            }
+        }
+        
+        // API Helper
+        async function apiCall(endpoint, options = {}) {
+            const config = {
+                ...options,
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            };
+            
+            return await axios(`${API_BASE}${endpoint}`, config);
+        }
+        
+        // Tab Management
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+            
+            // Show selected tab
+            document.getElementById(`${tabName}-tab`).classList.remove('hidden');
+            
+            // Update tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-blue-500', 'text-blue-600');
+                btn.classList.add('border-transparent', 'text-gray-500');
+            });
+            
+            document.querySelector(`[data-tab="${tabName}"]`).classList.remove('border-transparent', 'text-gray-500');
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('border-blue-500', 'text-blue-600');
+            
+            // Load tab-specific data
+            if (tabName === 'payments-list') {
+                loadPayments();
+            } else if (tabName === 'cash-handover') {
+                loadCashflow();
+            }
+        }
+        
+        // Dashboard Functions
+        async function loadDashboard() {
+            try {
+                const response = await apiCall('/payments/dashboard');
+                const data = response.data;
+                
+                // Update KPI cards
+                document.getElementById('totalCollected').textContent = 
+                    formatCurrency(data.total_collected);
+                document.getElementById('collectionRate').textContent = 
+                    `${data.collection_rate.toFixed(1)}%`;
+                document.getElementById('cashBalance').textContent = 
+                    formatCurrency(data.cash_balance);
+                document.getElementById('totalPayments').textContent = 
+                    data.total_payments;
+                
+                // Load charts
+                await loadRevenueChart();
+                await loadCollectorChart();
+                
+            } catch (error) {
+                console.error('Failed to load dashboard:', error);
+                showToast('Không thể tải dashboard', 'error');
+            }
+        }
+        
+        async function loadRevenueChart() {
+            try {
+                const response = await apiCall('/payments/dashboard/revenue-by-period?period=month');
+                const data = response.data.data;
+                
+                const ctx = document.getElementById('revenueChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(item => item.period),
+                        datasets: [{
+                            label: 'Doanh thu thu được',
+                            data: data.map(item => item.total_collected),
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return formatCurrency(value);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to load revenue chart:', error);
+            }
+        }
+        
+        async function loadCollectorChart() {
+            try {
+                const response = await apiCall('/payments/dashboard/collector-performance');
+                const data = response.data.collectors;
+                
+                const ctx = document.getElementById('collectorChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.map(item => item.collector),
+                        datasets: [{
+                            label: 'Tổng thu (VND)',
+                            data: data.map(item => item.total_collected),
+                            backgroundColor: 'rgba(34, 197, 94, 0.8)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return formatCurrency(value);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Failed to load collector chart:', error);
+            }
+        }
+        
+        // Payment Functions
+        document.getElementById('paymentForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                booking_id: document.getElementById('bookingId').value,
+                guest_name: document.getElementById('guestName').value,
+                amount_due: parseFloat(document.getElementById('amountDue').value),
+                amount_collected: parseFloat(document.getElementById('amountCollected').value),
+                payment_method: document.getElementById('paymentMethod').value,
+                collected_by: document.getElementById('collectedBy').value,
+                transaction_id: document.getElementById('transactionId').value,
+                notes: document.getElementById('notes').value
+            };
+            
+            try {
+                await apiCall('/payments/add', {
+                    method: 'POST',
+                    data: formData
+                });
+                
+                showToast('Đã lưu phiếu thu thành công', 'success');
+                resetPaymentForm();
+                
+                // Refresh dashboard if visible
+                if (!document.getElementById('dashboard-tab').classList.contains('hidden')) {
+                    await loadDashboard();
+                }
+                
+            } catch (error) {
+                console.error('Failed to add payment:', error);
+                showToast('Không thể lưu phiếu thu', 'error');
+            }
+        });
+        
+        function resetPaymentForm() {
+            document.getElementById('paymentForm').reset();
+        }
+        
+        async function loadPayments() {
+            try {
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+                const collector = document.getElementById('collectorFilter').value;
+                
+                let url = '/payments/list?';
+                if (startDate) url += `start_date=${startDate}&`;
+                if (endDate) url += `end_date=${endDate}&`;
+                if (collector) url += `collected_by=${collector}&`;
+                
+                const response = await apiCall(url);
+                const payments = response.data;
+                
+                const tbody = document.getElementById('paymentsTableBody');
+                tbody.innerHTML = '';
+                
+                payments.forEach(payment => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${formatDateTime(payment.timestamp)}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${payment.booking_id}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${payment.guest_name}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${formatCurrency(payment.amount_due)}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${formatCurrency(payment.amount_collected)}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${payment.payment_method}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${payment.collected_by}
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+            } catch (error) {
+                console.error('Failed to load payments:', error);
+                showToast('Không thể tải danh sách giao dịch', 'error');
+            }
+        }
+        
+        // Cash Handover Functions
+        document.getElementById('handoverForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = {
+                from_person: document.getElementById('fromPerson').value,
+                to_person: document.getElementById('toPerson').value,
+                amount: parseFloat(document.getElementById('handoverAmount').value),
+                description: document.getElementById('handoverDescription').value
+            };
+            
+            try {
+                await apiCall('/payments/cashflow/handover', {
+                    method: 'POST',
+                    data: formData
+                });
+                
+                showToast('Đã ghi nhận bàn giao tiền', 'success');
+                document.getElementById('handoverForm').reset();
+                await loadCashflow();
+                
+            } catch (error) {
+                console.error('Failed to record handover:', error);
+                showToast('Không thể ghi nhận bàn giao', 'error');
+            }
+        });
+        
+        async function loadCashflow() {
+            try {
+                const response = await apiCall('/payments/cashflow/list');
+                const cashflow = response.data;
+                
+                const container = document.getElementById('cashflowList');
+                container.innerHTML = '';
+                
+                cashflow.slice(0, 10).forEach(item => { // Show latest 10
+                    const div = document.createElement('div');
+                    div.className = 'border rounded-lg p-4';
+                    div.innerHTML = `
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="font-medium">${item.description}</p>
+                                <p class="text-sm text-gray-500">
+                                    ${item.from_person} → ${item.to_person}
+                                </p>
+                                <p class="text-xs text-gray-400">
+                                    ${formatDateTime(item.timestamp)}
+                                </p>
+                            </div>
+                            <div class="text-right">
+                                <p class="font-medium">${formatCurrency(item.amount)}</p>
+                                <p class="text-sm text-gray-500">
+                                    Số dư: ${formatCurrency(item.cash_balance)}
+                                </p>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+                
+            } catch (error) {
+                console.error('Failed to load cashflow:', error);
+            }
+        }
+        
+        // Utility Functions
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('vi-VN', {
+                style: 'currency',
+                currency: 'VND'
+            }).format(amount);
+        }
+        
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString('vi-VN');
+        }
+        
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toastIcon');
+            const messageEl = document.getElementById('toastMessage');
+            
+            messageEl.textContent = message;
+            
+            if (type === 'success') {
+                icon.className = 'fas fa-check-circle text-green-500 text-xl';
+            } else if (type === 'error') {
+                icon.className = 'fas fa-exclamation-circle text-red-500 text-xl';
+            } else {
+                icon.className = 'fas fa-info-circle text-blue-500 text-xl';
+            }
+            
+            toast.classList.remove('hidden');
+            
+            setTimeout(() => {
+                hideToast();
+            }, 5000);
+        }
+        
+        function hideToast() {
+            document.getElementById('toast').classList.add('hidden');
+        }
+        
+        function logout() {
+            localStorage.removeItem('access_token');
+            window.location.href = '/login';
+        }
+    </script>
+</body>
+</html>

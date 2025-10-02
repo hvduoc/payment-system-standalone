@@ -1,0 +1,199 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1>🏠 Quản lý phân bổ phòng</h1>
+<p class="muted">
+  <a href="/bookings/{{ booking.id }}">← Quay lại booking {{ booking.confirmation_code }}</a>
+</p>
+
+<!-- Booking Context -->
+<div style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+  <h3 style="margin: 0 0 8px 0;">📋 Booking Context</h3>
+  <p style="margin: 0;"><strong>{{ booking.guest_name }}</strong> • {{ booking.start_date }} - {{ booking.end_date }} • {{ "{:,}".format(booking.total_payout_vnd or 0) }} VND</p>
+  <p style="margin: 4px 0 0 0; color: #6c757d;">{{ booking.listing_raw or booking.property_short }}</p>
+</div>
+
+<!-- Room Assignment Form -->
+<form method="post" action="/bookings/{{ booking.id }}/room-assignment" style="max-width: 600px;">
+  
+  <h2>🏠 Thông tin phòng</h2>
+  
+  <label>Phòng đã đặt (từ booking)
+    <select name="booked_room" required>
+      <option value="">-- Chọn phòng đã đặt --</option>
+      {% for prop in properties %}
+        <option value="{{ prop.property_short or prop.property_name }}" 
+                {{ 'selected' if room_assignment and room_assignment.booked_room == (prop.property_short or prop.property_name) else '' }}>
+          {{ prop.property_short or prop.property_name }} 
+          {% if prop.airbnb_name and prop.airbnb_name != (prop.property_short or prop.property_name) %}
+            - {{ prop.airbnb_name }}
+          {% endif %}
+        </option>
+      {% endfor %}
+    </select>
+    <small>Phòng được khách book ban đầu trong reservation</small>
+  </label>
+  
+  <label>Phòng thực tế (khách ở thật)
+    <select name="actual_room" required>
+      <option value="">-- Chọn phòng thực tế --</option>
+      {% for prop in properties %}
+        <option value="{{ prop.property_short or prop.property_name }}" 
+                {{ 'selected' if room_assignment and room_assignment.actual_room == (prop.property_short or prop.property_name) else '' }}>
+          {{ prop.property_short or prop.property_name }}
+          {% if prop.airbnb_name and prop.airbnb_name != (prop.property_short or prop.property_name) %}
+            - {{ prop.airbnb_name }}
+          {% endif %}
+        </option>
+      {% endfor %}
+    </select>
+    <small>Phòng thực tế khách check-in và ở</small>
+  </label>
+  
+  <!-- Revenue Attribution -->
+  <h2 style="margin-top: 32px;">💰 Phân bổ doanh thu</h2>
+  
+  <label>Doanh thu tính cho phòng nào?
+    <select name="revenue_attribution" required>
+      <option value="actual_room" {{ 'selected' if (room_assignment and room_assignment.revenue_attribution == 'actual_room') or not room_assignment else '' }}>
+        🏠 Phòng thực tế (khuyến nghị)
+      </option>
+      <option value="booked_room" {{ 'selected' if room_assignment and room_assignment.revenue_attribution == 'booked_room' else '' }}>
+        📍 Phòng đã đặt
+      </option>
+      <option value="split" {{ 'selected' if room_assignment and room_assignment.revenue_attribution == 'split' else '' }}>
+        ⚖️ Chia đôi
+      </option>
+    </select>
+    <small>Quy tắc phân bổ {{ "{:,}".format(booking.total_payout_vnd or 0) }} VND</small>
+  </label>
+  
+  <!-- Change Details -->
+  <h2 style="margin-top: 32px;">📝 Chi tiết thay đổi</h2>
+  
+  <label>Lý do đổi phòng
+    <select name="change_reason" required>
+      <option value="" {{ 'selected' if not room_assignment or not room_assignment.change_reason else '' }}>-- Chọn lý do --</option>
+      <option value="maintenance" {{ 'selected' if room_assignment and room_assignment.change_reason == 'maintenance' else '' }}>
+        🔧 Bảo trì phòng đã đặt
+      </option>
+      <option value="guest_request" {{ 'selected' if room_assignment and room_assignment.change_reason == 'guest_request' else '' }}>
+        👤 Yêu cầu của khách
+      </option>
+      <option value="upgrade" {{ 'selected' if room_assignment and room_assignment.change_reason == 'upgrade' else '' }}>
+        ⬆️ Upgrade phòng
+      </option>
+      <option value="overbooking" {{ 'selected' if room_assignment and room_assignment.change_reason == 'overbooking' else '' }}>
+        📅 Overbooking/xung đột lịch
+      </option>
+      <option value="operational" {{ 'selected' if room_assignment and room_assignment.change_reason == 'operational' else '' }}>
+        ⚙️ Lý do vận hành
+      </option>
+      <option value="other" {{ 'selected' if room_assignment and room_assignment.change_reason == 'other' else '' }}>
+        📋 Khác
+      </option>
+    </select>
+  </label>
+  
+  <label>Ngày thay đổi
+    <input type="date" name="changed_date" 
+           value="{{ room_assignment.changed_date if room_assignment and room_assignment.changed_date else booking.start_date }}">
+    <small>Ngày xác nhận/thực hiện việc đổi phòng</small>
+  </label>
+  
+  <label>Người thực hiện
+    <input type="text" name="changed_by" 
+           value="{{ room_assignment.changed_by if room_assignment else '' }}" 
+           placeholder="Tên nhân viên">
+    <small>Ai là người xử lý việc đổi phòng</small>
+  </label>
+  
+  <label>Ghi chú
+    <textarea name="notes" rows="3" placeholder="Mô tả chi tiết về việc đổi phòng...">{{ room_assignment.notes if room_assignment else '' }}</textarea>
+  </label>
+  
+  <!-- Submit -->
+  <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #dee2e6;">
+    <button type="submit" class="btn" style="margin-right: 8px;">
+      {{ '💾 Cập nhật' if room_assignment else '➕ Tạo mới' }} Room Assignment
+    </button>
+    <a href="/bookings/{{ booking.id }}" class="btn" style="background: #6c757d;">❌ Hủy</a>
+  </div>
+  
+</form>
+
+<!-- Room Assignment Preview -->
+{% if room_assignment %}
+<div style="margin-top: 32px; background: #e3f2fd; padding: 16px; border-radius: 8px;">
+  <h3>🔍 Preview phân bổ doanh thu</h3>
+  <div id="revenue-preview">
+    <!-- Will be populated by JavaScript or server-side -->
+    <p><strong>Tổng:</strong> {{ "{:,}".format(booking.total_payout_vnd or 0) }} VND</p>
+    <p><strong>Phòng đã đặt (<span id="booked-room-name">{{ room_assignment.booked_room }}</span>):</strong> 
+      <span id="booked-revenue">—</span> VND</p>
+    <p><strong>Phòng thực tế (<span id="actual-room-name">{{ room_assignment.actual_room }}</span>):</strong> 
+      <span id="actual-revenue">—</span> VND</p>
+  </div>
+</div>
+{% endif %}
+
+<script>
+// Simple revenue attribution preview  
+function updateRevenuePreview() {
+  const attribution = document.querySelector('[name="revenue_attribution"]').value;
+  const totalRevenue = parseInt('{{ booking.total_payout_vnd or 0 }}');
+  const bookedSpan = document.getElementById('booked-revenue');
+  const actualSpan = document.getElementById('actual-revenue');
+  
+  // Update room names in preview
+  const bookedSelect = document.querySelector('[name="booked_room"]');
+  const actualSelect = document.querySelector('[name="actual_room"]');
+  const bookedNameSpan = document.getElementById('booked-room-name');
+  const actualNameSpan = document.getElementById('actual-room-name');
+  
+  if (bookedSelect && bookedNameSpan) {
+    const bookedOption = bookedSelect.options[bookedSelect.selectedIndex];
+    bookedNameSpan.textContent = bookedOption.value || '—';
+  }
+  
+  if (actualSelect && actualNameSpan) {
+    const actualOption = actualSelect.options[actualSelect.selectedIndex];
+    actualNameSpan.textContent = actualOption.value || '—';
+  }
+  
+  if (!bookedSpan || !actualSpan) return;
+  
+  let bookedRevenue = 0;
+  let actualRevenue = 0;
+  
+  if (attribution === 'booked_room') {
+    bookedRevenue = totalRevenue;
+  } else if (attribution === 'actual_room') {
+    actualRevenue = totalRevenue;
+  } else if (attribution === 'split') {
+    bookedRevenue = Math.floor(totalRevenue / 2);
+    actualRevenue = totalRevenue - bookedRevenue;
+  }
+  
+  bookedSpan.textContent = bookedRevenue.toLocaleString();
+  actualSpan.textContent = actualRevenue.toLocaleString();
+}
+
+// Update preview on page load and when selection changes
+document.addEventListener('DOMContentLoaded', updateRevenuePreview);
+const attributionSelect = document.querySelector('[name="revenue_attribution"]');
+if (attributionSelect) {
+  attributionSelect.addEventListener('change', updateRevenuePreview);
+}
+
+// Listen to room selection changes
+const bookedRoomSelect = document.querySelector('[name="booked_room"]');
+const actualRoomSelect = document.querySelector('[name="actual_room"]');
+if (bookedRoomSelect) {
+  bookedRoomSelect.addEventListener('change', updateRevenuePreview);
+}
+if (actualRoomSelect) {
+  actualRoomSelect.addEventListener('change', updateRevenuePreview);
+}
+</script>
+
+{% endblock %}

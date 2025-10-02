@@ -1,0 +1,313 @@
+{% extends "layout.html" %}
+{% block content %}
+<style>
+/* ===== Header ===== */
+.page-header{
+  display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:12px;
+}
+.page-header h1{margin:0}
+
+/* ===== Filter Card ===== */
+.filter-card{
+  background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 4px 12px rgba(15,23,42,.04);
+  padding:16px 16px 12px;margin-bottom:20px;
+}
+.fgrid{
+  display:grid;gap:12px 16px;align-items:end;
+  grid-template-columns: repeat(12,minmax(0,1fr));
+}
+
+/* hàng 1: range + status + channel */
+.fg-range{grid-column: span 6}
+.fg-status{grid-column: span 3}
+.fg-channel{grid-column: span 3}
+
+/* hàng 2: building + property + buttons + tools */
+.fg-building{grid-column: span 3}
+.fg-property{grid-column: span 3}
+.fg-actions{grid-column: span 3; display:flex; gap:8px; align-items:center}
+.fg-tools{grid-column: span 3; display:flex; gap:12px; justify-content:flex-end; align-items:center}
+
+/* date-range field */
+.range{
+  display:flex;gap:8px;align-items:center;
+}
+.range .dash{color:var(--muted)}
+
+/* column dropdown */
+.column-toggle{position:relative}
+.column-toggle-btn{
+  background:#fff;border:1px solid var(--line);padding:8px 10px;border-radius:8px;cursor:pointer;
+}
+.column-dropdown{
+  position:absolute;right:0;top:calc(100% + 6px);display:none;width:220px;background:#fff;border:1px solid var(--line);
+  border-radius:10px;box-shadow:0 10px 24px rgba(0,0,0,.08);padding:8px;z-index:10;
+}
+.column-dropdown.show{display:block}
+.column-dropdown label{display:flex;gap:8px;align-items:center;padding:8px;border-radius:6px;font-size:14px}
+.column-dropdown label:hover{background:#f5f7fb}
+
+/* ===== Table ===== */
+.table-container{border:1px solid var(--line);border-radius:12px;overflow-x:auto}
+.booking-table{width:100%;border-collapse:collapse}
+.booking-table th{background:#f9fafb;position:relative}
+.resizer{position:absolute;top:0;right:-2px;width:5px;height:100%;cursor:col-resize}
+.resizer:hover,.resizing{background:#3b82f6}
+
+.subtext{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+
+/* ===== Mobile ===== */
+@media (max-width: 900px){
+  .fg-range{grid-column:1 / -1}
+  .fg-status,.fg-channel,.fg-building,.fg-property{grid-column: span 6}
+  .fg-actions{grid-column: span 6}
+  .fg-tools{grid-column: span 6;justify-content:flex-start}
+
+  .booking-table thead{display:none}
+  .booking-table tr{display:block;margin:10px 8px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:10px}
+  .booking-table td{display:grid;grid-template-columns:120px 1fr;gap:10px;padding:8px 0;border-bottom:1px dashed #eee;text-align:right}
+  .booking-table td:last-child{border-bottom:none}
+  .booking-table td::before{content:attr(data-label);text-align:left;color:var(--muted);font-weight:500}
+  .subtext{max-width:100%;white-space:normal}
+}
+
+/* ===== Pager ===== */
+.pager{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin:12px;flex-wrap:wrap}
+.pager .info{margin-right:auto;color:var(--muted)}
+.pager .btn{padding:6px 10px;border:1px solid var(--line);background:#fff;border-radius:8px;color:var(--fg);text-decoration:none}
+.pager .btn[disabled]{opacity:.5;cursor:not-allowed;pointer-events:none}
+.pager .btn.active{background:#0b57d0;color:#fff;border-color:#0b57d0}
+</style>
+
+<div class="page-header">
+  <h1>Danh sách đặt phòng</h1>
+  <div class="header-actions">
+    <a href="/bookings/new" class="btn btn-green">➕ Thêm Offline</a>
+  </div>
+</div>
+
+<div class="filter-card">
+  <form method="get" action="/bookings" class="fgrid">
+    <!-- Hàng 1 -->
+    <div class="fg-range">
+      <label>Khoảng ngày</label>
+      <div class="range">
+        <input type="date" name="start" value="{{ start.strftime('%Y-%m-%d') if start else '' }}">
+        <span class="dash">—</span>
+        <input type="date" name="end" value="{{ end.strftime('%Y-%m-%d') if end else '' }}">
+      </div>
+    </div>
+
+    <div class="fg-status">
+      <label>Trạng thái</label>
+      <select name="status">
+        <option value="">Tất cả</option>
+        <option value="xác nhận" {{ 'selected' if status == 'xác nhận' else '' }}>Đã xác nhận</option>
+        <option value="hủy" {{ 'selected' if status == 'hủy' else '' }}>Khách đã hủy</option>
+      </select>
+    </div>
+
+    <div class="fg-channel">
+      <label>Kênh</label>
+      <input type="text" name="channel" value="{{ channel or '' }}" placeholder="Airbnb / Offline …">
+    </div>
+
+    <!-- Hàng 2 -->
+    <div class="fg-building">
+      <label>Tòa nhà</label>
+      <select name="building">
+        <option value="">Tất cả tòa nhà</option>
+        {% for bld in all_buildings %}
+          <option value="{{ bld }}" {{ 'selected' if building == bld else '' }}>{{ bld }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="fg-property">
+      <label>Căn hộ</label>
+      <input type="text" name="property" value="{{ property or '' }}" placeholder="AVA-403 …">
+    </div>
+
+    <div class="fg-actions">
+      <button class="btn btn-blue" type="submit">🔍 Lọc</button>
+      <a class="btn btn-gray" href="/bookings">Xóa lọc</a>
+    </div>
+
+    <div class="fg-tools">
+      <label style="display:flex;align-items:center;gap:8px">
+        <span style="color:var(--muted)">Hàng/trang</span>
+        <select name="page_size" onchange="this.form.submit()">
+          {% set _psize = (pagination.page_size if pagination else 50) %}
+          {% for n in [20,50,100,150,200] %}
+            <option value="{{n}}" {{ 'selected' if _psize==n else '' }}>{{n}}</option>
+          {% endfor %}
+        </select>
+        <input type="hidden" name="p" value="1">
+      </label>
+
+      <div class="column-toggle">
+        <button type="button" class="column-toggle-btn" onclick="toggleColumnDropdown()">⚙️ Tùy chỉnh cột</button>
+        <div id="columnDropdown" class="column-dropdown"></div>
+      </div>
+    </div>
+  </form>
+</div>
+
+<div class="table-container">
+  <table class="booking-table" id="bookingTable">
+    <thead>
+      <tr>
+        <th data-col-name="Mã">Mã<div class="resizer"></div></th>
+        <th data-col-name="Listing">Listing<div class="resizer"></div></th>
+        <th data-col-name="BĐ">BĐ<div class="resizer"></div></th>
+        <th data-col-name="KT">KT<div class="resizer"></div></th>
+        <th data-col-name="Đêm" class="num">Đêm<div class="resizer"></div></th>
+        <th data-col-name="Trạng thái">Trạng thái<div class="resizer"></div></th>
+        <th data-col-name="Thu nhập" class="num">Thu nhập<div class="resizer"></div></th>
+        <th data-col-name="Kênh">Kênh<div class="resizer"></div></th>
+        <th data-col-name="Khách">Khách<div class="resizer"></div></th>
+        <th data-col-name="Liên hệ">Liên hệ<div class="resizer"></div></th>
+        <th data-col-name="SL Khách">SL Khách<div class="resizer"></div></th>
+        <th data-col-name="Ngày đặt">Ngày đặt<div class="resizer"></div></th>
+        <th data-col-name="Thao tác">Thao tác</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in bookings %}
+        {% set st = b.status|default('')|lower %}
+        {% if 'hủy' in st or 'từ chối' in st or 'hết hạn' in st %}{% set dot_class = 'cancel' %}
+        {% elif 'xác nhận' in st or 'đang đón tiếp' in st or 'đánh giá' in st or 'khách trước đây' in st or 'sắp tới' in st %}{% set dot_class = 'ok' %}
+        {% else %}{% set dot_class = 'warn' %}{% endif %}
+
+        <tr>
+          <td data-label="Mã">{{ b.confirmation_code }}</td>
+          <td data-label="Listing" title="{{ b.listing_raw }}">
+            <div style="font-weight:600">{{ b.property_short or '—' }}</div>
+            {% if b.listing_raw and b.listing_raw != b.property_short %}
+              <div class="subtext">{{ b.listing_raw }}</div>
+            {% endif %}
+          </td>
+
+          <td data-label="BĐ">{{ b.start_date }}</td>
+          <td data-label="KT">{{ b.end_date }}</td>
+          <td data-label="Đêm" class="num">{{ b.num_nights }}</td>
+          <td data-label="Trạng thái" title="{{ b.status }}"><span class="dot {{ dot_class }}"></span></td>
+          <td data-label="Thu nhập" class="num">{{ "{:,}".format(b.total_payout_vnd or 0) }}</td>
+          <td data-label="Kênh">{{ b.channel_name }}</td>
+          <td data-label="Khách">{{ b.guest_name }}</td>
+          <td data-label="Liên hệ">{{ b.guest_contact }}</td>
+          <td data-label="SL Khách">{{ b.num_adults or 0 }}/{{ b.num_children or 0 }}/{{ b.num_infants or 0 }}</td>
+          <td data-label="Ngày đặt">{{ b.booking_date }}</td>
+          <td data-label="Thao tác" class="actions">
+            <div style="display:flex;gap:8px;align-items:center">
+              <a href="/bookings/{{ b.id }}" title="Chi tiết">👁️</a>
+              <a href="/bookings/{{ b.id }}/edit" title="Sửa">✏️</a>
+              <form method="post" action="/bookings/{{ b.id }}/delete" class="inline-form"
+                    onsubmit="return confirm('Bạn có chắc muốn xóa?');">
+                <button type="submit" title="Xóa" class="danger">🗑️</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if pagination %}
+    {% set base = '/bookings?'
+      ~ ('start=' ~ (start.strftime('%Y-%m-%d') if start else '') )
+      ~ ('&end=' ~ (end.strftime('%Y-%m-%d') if end else '') )
+      ~ ('&status=' ~ (status|urlencode if status else '') )
+      ~ ('&channel=' ~ (channel|urlencode if channel else '') )
+      ~ ('&building=' ~ (building|urlencode if building else '') )
+      ~ ('&property=' ~ (property|urlencode if property else '') )
+      ~ ('&page_size=' ~ pagination.page_size) %}
+    <div class="pager">
+      <div class="info">Kết quả: {{ pagination.start }}–{{ pagination.end }} / {{ pagination.total }}</div>
+      <a class="btn" href="{{ base ~ '&p=1' }}" {{ 'disabled' if pagination.page==1 else '' }}>« Đầu</a>
+      <a class="btn" href="{{ base ~ '&p=' ~ (pagination.page-1) }}" {{ 'disabled' if pagination.page==1 else '' }}>‹ Trước</a>
+      {% set from = [1, pagination.page-2]|max %}
+      {% set to = [pagination.pages, pagination.page+2]|min %}
+      {% for i in range(from, to+1) %}
+        <a class="btn {{ 'active' if i==pagination.page else '' }}" href="{{ base ~ '&p=' ~ i }}">{{ i }}</a>
+      {% endfor %}
+      <a class="btn" href="{{ base ~ '&p=' ~ (pagination.page+1) }}" {{ 'disabled' if pagination.page==pagination.pages else '' }}>Sau ›</a>
+      <a class="btn" href="{{ base ~ '&p=' ~ pagination.pages }}" {{ 'disabled' if pagination.page==pagination.pages else '' }}>Cuối »</a>
+    </div>
+  {% endif %}
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const table = document.getElementById('bookingTable');
+  const headers = Array.from(table.querySelectorAll('thead th'));
+  const columnDropdown = document.getElementById('columnDropdown');
+
+  // 1) Tạo checkbox cho dropdown "Tùy chỉnh cột"
+  headers.forEach((header, index) => {
+    const name = header.getAttribute('data-col-name');
+    const colIdx = index + 1;
+    const defaultOn = !['Liên hệ','SL Khách','Ngày đặt'].includes(name); // ẩn bớt cột ít quan trọng
+
+    const wrap = document.createElement('label');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = defaultOn;
+    cb.addEventListener('change', () => toggleColumn(colIdx, cb.checked));
+
+    wrap.appendChild(cb);
+    wrap.appendChild(document.createTextNode(' ' + name));
+    columnDropdown.appendChild(wrap);
+  });
+
+  // 2) Phục hồi trạng thái từ localStorage
+  const cbs = columnDropdown.querySelectorAll('input[type="checkbox"]');
+  cbs.forEach((cb, idx) => {
+    const k = 'col_visibility_' + idx;
+    const v = localStorage.getItem(k);
+    if (v !== null) cb.checked = (v === 'true');
+    toggleColumn(idx + 1, cb.checked);
+  });
+
+  // 3) Kéo co giãn cột
+  headers.forEach((header) => {
+    const resizer = header.querySelector('.resizer');
+    if (!resizer) return;
+    resizer.addEventListener('mousedown', function (e) {
+      e.preventDefault();
+      const startX = e.pageX;
+      const startW = header.offsetWidth;
+      const move = (ev) => {
+        const w = startW + (ev.pageX - startX);
+        if (w > 60) header.style.width = w + 'px';
+      };
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup', up);
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+    });
+  });
+});
+
+// Toggle dropdown
+function toggleColumnDropdown(){
+  document.getElementById('columnDropdown').classList.toggle('show');
+}
+// Hide dropdown when clicking outside
+window.addEventListener('click', function(e){
+  const dd = document.getElementById('columnDropdown');
+  const btn = document.querySelector('.column-toggle-btn');
+  if (!dd.contains(e.target) && !btn.contains(e.target)) dd.classList.remove('show');
+});
+
+// Show/Hide column
+function toggleColumn(idx, visible){
+  const t = document.getElementById('bookingTable');
+  const cells = t.querySelectorAll(`tr > *:nth-child(${idx})`);
+  cells.forEach(c => c.style.display = visible ? '' : 'none');
+  localStorage.setItem('col_visibility_' + (idx - 1), visible);
+}
+</script>
+{% endblock %}

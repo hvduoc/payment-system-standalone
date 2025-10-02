@@ -1,0 +1,90 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1>Chi tiết đặt phòng</h1>
+<p class="muted"><a href="/bookings">← Quay lại danh sách</a></p>
+
+<!-- Basic Booking Information -->
+<h2>Thông tin cơ bản</h2>
+<table>
+  <tr><th>Mã xác nhận</th><td>{{ b.confirmation_code }}</td></tr>
+  <tr><th>Listing</th><td>{{ b.listing_raw }}</td></tr>
+  <tr><th>Tòa nhà</th><td>{{ b.building_name or '—' }}</td></tr>
+  <tr><th>Căn (unit)</th><td>{{ b.unit_number or '—' }} · Mã: {{ b.unit_short or '—' }}</td></tr>
+  <tr><th>Mã căn (ngắn)</th><td>{{ b.property_short or '—' }}</td></tr>
+  <tr><th>Ngày đặt</th><td>{{ b.booking_date }}</td></tr>
+  <tr><th>Bắt đầu</th><td>{{ b.start_date }}</td></tr>
+  <tr><th>Kết thúc</th><td>{{ b.end_date }}</td></tr>
+  <tr><th>Số đêm</th><td>{{ b.num_nights }}</td></tr>
+  <tr><th>Khách</th><td>{{ b.guest_name }}</td></tr>
+  <tr><th>Liên hệ</th><td>{{ b.guest_contact }}</td></tr>
+  <tr><th>Người lớn / Trẻ / Em bé</th><td>{{ b.num_adults or 0 }} / {{ b.num_children or 0 }} / {{ b.num_infants or 0 }}</td></tr>
+  <tr><th>Trạng thái</th><td>{{ b.status }}</td></tr>
+  <tr><th>Thu nhập (VND)</th><td>{{ "{:,}".format(b.total_payout_vnd or 0) }}</td></tr>
+  <tr><th>Kênh</th><td>{{ b.channel_name }}</td></tr>
+</table>
+
+<!-- Room Assignment Section -->
+<h2 style="margin-top: 32px;">🏠 Phân bổ phòng</h2>
+{% if room_assignment %}
+  <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+    <table style="margin: 0;">
+      <tr><th>Phòng đã đặt</th><td><strong>{{ room_assignment.booked_room or '—' }}</strong></td></tr>
+      <tr><th>Phòng thực tế</th><td><strong>{{ room_assignment.actual_room or '—' }}</strong></td></tr>
+      {% if room_assignment.booked_room and room_assignment.actual_room and room_assignment.booked_room != room_assignment.actual_room %}
+        <tr style="background: #fff3cd;">
+          <th>⚠️ Đổi phòng</th>
+          <td><strong>{{ room_assignment.booked_room }} → {{ room_assignment.actual_room }}</strong></td>
+        </tr>
+        <tr><th>Phân bổ doanh thu</th><td>
+          {% if room_assignment.revenue_attribution == "booked_room" %}
+            📍 Phòng đã đặt ({{ room_assignment.booked_room }})
+          {% elif room_assignment.revenue_attribution == "actual_room" %}
+            🏠 Phòng thực tế ({{ room_assignment.actual_room }})
+          {% elif room_assignment.revenue_attribution == "split" %}
+            ⚖️ Chia đôi
+          {% else %}
+            🏠 Phòng thực tế (mặc định)
+          {% endif %}
+        </td></tr>
+        <tr><th>Lý do đổi</th><td>{{ room_assignment.change_reason or '—' }}</td></tr>
+        <tr><th>Ngày đổi</th><td>{{ room_assignment.changed_date or '—' }}</td></tr>
+        <tr><th>Người đổi</th><td>{{ room_assignment.changed_by or '—' }}</td></tr>
+      {% endif %}
+      {% if room_assignment.notes %}
+        <tr><th>Ghi chú</th><td>{{ room_assignment.notes }}</td></tr>
+      {% endif %}
+    </table>
+  </div>
+{% else %}
+  <div style="background: #e9ecef; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+    <p style="margin: 0; color: #6c757d;">
+      📍 Chưa có thông tin phân bổ phòng. 
+      <a href="/bookings/{{ b.id }}/room-assignment" style="color: #007bff;">Thêm phân bổ phòng</a>
+    </p>
+  </div>
+{% endif %}
+
+<!-- Revenue Attribution -->
+{% if revenue_attribution %}
+  <h3>💰 Phân bổ doanh thu</h3>
+  <div style="background: #d4edda; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+    <table style="margin: 0;">
+      <tr><th>Tổng doanh thu</th><td><strong>{{ "{:,}".format(revenue_attribution.total_revenue) }} VND</strong></td></tr>
+      {% if revenue_attribution.room_change %}
+        <tr><th>Phòng {{ revenue_attribution.booked_room }}</th><td>{{ "{:,}".format(revenue_attribution.booked_room_revenue) }} VND</td></tr>
+        <tr><th>Phòng {{ revenue_attribution.actual_room }}</th><td>{{ "{:,}".format(revenue_attribution.actual_room_revenue) }} VND</td></tr>
+        <tr><th>Phương pháp</th><td>{{ revenue_attribution.attribution_method }}</td></tr>
+      {% else %}
+        <tr><th>Phân bổ</th><td>Toàn bộ cho phòng đã đặt (không có đổi phòng)</td></tr>
+      {% endif %}
+    </table>
+  </div>
+{% endif %}
+
+<!-- Action Buttons -->
+<div style="margin-top: 24px;">
+  <a href="/bookings/{{ b.id }}/edit" class="btn">✏️ Chỉnh sửa booking</a>
+  <a href="/bookings/{{ b.id }}/room-assignment" class="btn" style="margin-left: 8px;">🏠 Quản lý phòng</a>
+</div>
+
+{% endblock %}

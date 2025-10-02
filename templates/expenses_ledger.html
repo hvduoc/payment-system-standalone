@@ -1,0 +1,227 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-3">Sổ chi (Expenses)</h2>
+
+  <form class="row g-2 mb-3" id="exp-filter">
+    <div class="col-auto"><input type="month" id="f-month" class="form-control"></div>
+    <div class="col-auto"><input type="number" id="f-building" class="form-control" placeholder="Building ID"></div>
+    <div class="col-auto">
+      <button class="btn btn-outline-secondary" type="button" id="btn-load">Tải</button>
+      <button class="btn btn-dark" type="button" id="btn-new">+ Chi phí</button>
+    </div>
+  </form>
+
+  <div class="table-responsive">
+    <table class="table table-hover align-middle" id="tbl-exp">
+      <thead class="table-light"><tr>
+        <th>Ngày</th><th>Tháng</th><th>Danh mục</th><th>Phạm vi</th><th>Số tiền</th><th>Nhà cung cấp</th><th>Ghi chú</th><th></th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-primary" id="btn-allocate">Tính phân bổ</button>
+  </div>
+</div>
+
+  <div class="modal" id="expModal" tabindex="-1" aria-modal="true" aria-labelledby="expModalLabel" role="dialog">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">+ Chi phí</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div id="exp-error" class="alert alert-danger d-none"></div>
+        <div class="mb-2"><label class="form-label">Ngày</label><input type="date" id="e-date" class="form-control"></div>
+        <div class="mb-2"><label class="form-label">Tháng</label><input type="month" id="e-month" class="form-control"></div>
+        <div class="mb-2">
+        <label class="form-label">Danh mục</label>
+        <input class="form-control" id="e-cat-name" list="cat-list" placeholder="gõ để tìm (vd: electricity, water, wifi...)">
+        <datalist id="cat-list"></datalist>
+        <input type="hidden" id="e-cat"> <!-- sẽ set ID tự động -->
+        </div>
+        <div class="mb-2"><label class="form-label">Số tiền (VND)</label><input type="number" id="e-amount" class="form-control"></div>
+        <div class="mb-2">
+        <label class="form-label">Tòa nhà</label>
+        <select id="e-building" class="form-select"><option value="">-- Chọn tòa --</option></select>
+        </div>
+        <div class="mb-2">
+        <label class="form-label">Căn hộ</label>
+        <select id="e-prop" class="form-select"><option value="">-- Chọn căn --</option></select>
+        </div>
+
+        <div class="mb-2"><label class="form-label">Phương pháp phân bổ</label>
+          <select id="e-method" class="form-select">
+            <option value="direct">direct</option>
+            <option value="per_property">per_property</option>
+            <option value="per_available_night">per_available_night</option>
+            <option value="per_occupied_night" selected>per_occupied_night</option>
+          </select>
+        </div>
+        <div class="mb-2"><label class="form-label">Vendor</label><input type="text" id="e-vendor" class="form-control"></div>
+        <div class="mb-2"><label class="form-label">Ghi chú</label><textarea id="e-note" class="form-control"></textarea></div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button><button class="btn btn-dark" id="e-save">Lưu</button></div>
+    </div>
+  </div>
+</div>
+
+<style>
+  #exp-loading {position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(255,255,255,0.5);z-index:9999;display:none;align-items:center;justify-content:center;}
+</style>
+<div id="exp-loading"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div></div>
+<script>
+let ECATS = [], BLD_CACHE = [], PROP_CACHE = [], CAT_BY_ID = {};
+
+function showLoading(show=true){document.getElementById('exp-loading').style.display=show?'flex':'none';}
+function showError(msg){const e=document.getElementById('exp-error');e.textContent=msg;e.classList.remove('d-none');}
+function clearError(){const e=document.getElementById('exp-error');e.textContent='';e.classList.add('d-none');}
+
+async function loadAux() {
+  showLoading(true);
+  ECATS = await fetch('/expense-aux/categories').then(r=>r.json());
+  const dl = document.getElementById('cat-list');
+  dl.innerHTML = ECATS.map(c=>`<option value="${c.name}">#${c.id}</option>`).join('');
+
+  BLD_CACHE = await fetch('/expense-aux/buildings').then(r=>r.json());
+  const bSel = document.getElementById('e-building');
+  bSel.innerHTML = '<option value="">-- Chọn tòa --</option>' + BLD_CACHE.map(b=>`<option value="${b.id}">${b.name} (#${b.id})</option>`).join('');
+
+  PROP_CACHE = await fetch('/expense-aux/properties').then(r=>r.json());
+  const pSel = document.getElementById('e-prop');
+  pSel.innerHTML = '<option value="">-- Chọn căn --</option>' + PROP_CACHE.map(p=>`<option value="${p.id}">${p.name} (#${p.id})</option>`).join('');
+
+  // Nếu chọn Property thì xóa Building (tránh nhập cả 2)
+  pSel.addEventListener('change', ()=> { if(pSel.value) bSel.value=''; });
+  showLoading(false);
+}
+
+// map tên → id khi lưu
+function resolveCategoryId() {
+  const name = (document.getElementById('e-cat-name').value || '').trim().toLowerCase();
+  const hit = ECATS.find(c => c.name.toLowerCase() === name);
+  document.getElementById('e-cat').value = hit ? hit.id : '';
+  return hit ? hit.id : null;
+}
+
+async function loadCategories() {
+  const res = await fetch('/expense-aux/categories');
+  const data = await res.json();
+  CAT_BY_ID = Object.fromEntries(data.map(c => [c.id, c.name]));
+}
+    
+(function(){
+  function getModal(){
+    const el=document.getElementById('expModal');
+    if (window.bootstrap && bootstrap.Modal) return new bootstrap.Modal(el);
+    el.style.display='block'; el.classList.add('show');
+    return {show(){el.style.display='block'; el.classList.add('show')}, hide(){el.style.display='none'; el.classList.remove('show')}}
+  }
+  const tbody = document.querySelector('#tbl-exp tbody');
+  // Escape HTML để chống XSS
+  const escapeHTML = s => String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fmtV = (n)=> new Intl.NumberFormat('vi-VN').format(Number(n||0));
+
+  async function load(){
+    const m = document.getElementById('f-month').value;
+    const b = document.getElementById('f-building').value;
+    const qs = new URLSearchParams(); if(m) qs.set('month', m); if(b) qs.set('building_id', b);
+    showLoading(true);
+    try {
+      const res = await fetch('/expenses?'+qs.toString());
+      const data = await res.json();
+      tbody.innerHTML = data.map(x=>{
+        // Tìm tên danh mục
+        const catName = CAT_BY_ID[x.category_id] || x.category_id;
+        // Tìm tên tòa/căn hộ
+        let scope = '-';
+        if(x.property_id){
+          const prop = PROP_CACHE.find(p=>p.id==x.property_id);
+          scope = prop ? `<span title="${escapeHTML(prop.name)}" class="badge bg-info-subtle text-dark">Căn: ${escapeHTML(prop.name)} (#${prop.id})</span>` : `Căn #${escapeHTML(x.property_id)}`;
+        }else if(x.building_id){
+          const bld = BLD_CACHE.find(b=>b.id==x.building_id);
+          scope = bld ? `<span title="${escapeHTML(bld.name)}" class="badge bg-primary-subtle text-dark">Tòa: ${escapeHTML(bld.name)} (#${bld.id})</span>` : `Tòa #${escapeHTML(x.building_id)}`;
+        }
+        return `<tr>
+          <td>${escapeHTML(x.date||'')}</td>
+          <td>${escapeHTML(x.month)}</td>
+          <td>${escapeHTML(catName)}</td>
+          <td>${scope}</td>
+          <td><span class="fw-bold text-success">${fmtV(x.amount)}</span></td>
+          <td>${escapeHTML(x.vendor||'')}</td>
+          <td>${escapeHTML(x.note||'')}</td>
+          <td><button class="btn btn-sm btn-outline-danger" data-del="${x.id}" title="Xóa chi phí"><i class="bi bi-trash"></i></button></td>
+        </tr>`;
+      }).join('');
+    } catch(e) {
+      showError('Lỗi tải dữ liệu chi phí');
+    }
+    showLoading(false);
+  }
+
+  document.getElementById('btn-load').addEventListener('click', ()=>{clearError();load();});
+  document.getElementById('btn-new').addEventListener('click', ()=>{
+    clearError();
+    getModal().show();
+    document.getElementById('e-month').value = document.getElementById('f-month').value || '';
+    document.getElementById('e-date').focus();
+  });
+
+  document.addEventListener('click', async (e)=>{
+    const id = e.target.getAttribute('data-del'); if(!id) return;
+    if(!confirm('Xóa chi phí này?')) return;
+    showLoading(true);
+    const res = await fetch('/expenses/'+id,{method:'DELETE'});
+    showLoading(false);
+    if(res.ok) load();
+  });
+
+  document.getElementById('e-save').addEventListener('click', async ()=>{
+    clearError();
+    const catId = resolveCategoryId();
+    if (!catId) { showError('Chọn danh mục hợp lệ (gõ và chọn từ gợi ý)'); return; }
+    const dateVal = document.getElementById('e-date').value || (document.getElementById('e-month').value+'-01');
+    const monthVal = document.getElementById('e-month').value;
+    const amountVal = document.getElementById('e-amount').value;
+    if (!monthVal || !amountVal || isNaN(parseInt(amountVal,10)) || parseInt(amountVal,10)<=0) {
+      showError('Vui lòng nhập tháng và số tiền hợp lệ'); return;
+    }
+    showLoading(true);
+    const payload = {
+        date: dateVal,
+        month: monthVal,
+        category_id: parseInt(catId, 10),
+        amount: parseInt(amountVal, 10),
+        building_id: document.getElementById('e-building').value ? parseInt(document.getElementById('e-building').value, 10) : null,
+        property_id: document.getElementById('e-prop').value ? parseInt(document.getElementById('e-prop').value, 10) : null,
+        allocation_method: document.getElementById('e-method').value,
+        vendor: document.getElementById('e-vendor').value,
+        note: document.getElementById('e-note').value
+    };
+    try {
+      const res = await fetch('/expenses',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      if(res.ok){ getModal().hide(); load(); }
+      else showError('Lưu chi phí thất bại');
+    } catch(e) { showError('Lỗi khi lưu chi phí'); }
+    showLoading(false);
+  });   
+
+  document.getElementById('btn-allocate').addEventListener('click', async ()=>{
+    clearError();
+    const m = document.getElementById('f-month').value; if(!m) {showError('Chọn tháng'); return;}
+    const b = document.getElementById('f-building').value; const qs = new URLSearchParams({month:m}); if(b) qs.set('building_id', b);
+    showLoading(true);
+    try {
+      const res = await fetch('/expenses/allocate?'+qs.toString(), {method:'POST'});
+      if(res.ok) alert('Đã tính phân bổ');
+      else showError('Tính phân bổ thất bại');
+    } catch(e) { showError('Lỗi khi tính phân bổ'); }
+    showLoading(false);
+  });
+
+  load();
+  loadAux();  // nạp dropdown và datalist
+  loadCategories(); // nạp danh mục
+})();
+</script>
+{% endblock %}

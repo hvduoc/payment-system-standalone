@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1>Chỉnh sửa đặt phòng</h1>
+<p class="muted"><a href="/bookings">← Quay lại danh sách</a></p>
+
+<form method="post" action="/bookings/{{ booking.id }}/edit" style="margin-top:24px; display:grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 800px;">
+  <label style="grid-column: 1 / -1;">Căn hộ
+    <select name="property_id" required>
+      {% for prop in properties %}
+        <option value="{{ prop.id }}" {{ 'selected' if booking.property_id == prop.id else '' }}>
+          {{ prop.property_short or prop.property_name }}
+        </option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label>Ngày nhận phòng
+    <input type="date" name="start_date" value="{{ booking.start_date }}" required>
+  </label>
+  <label>Ngày trả phòng
+    <input type="date" name="end_date" value="{{ booking.end_date }}" required>
+  </label>
+
+  <label>Tổng thu nhập (VND)
+    <input type="number" name="total_payout_vnd" value="{{ booking.total_payout_vnd or '' }}" required>
+  </label>
+
+  <label>Nhân viên Sale
+    <select name="salesperson_id">
+      <option value="">-- Không có --</option>
+      {% for sale in salespeople %}
+        <option value="{{ sale.id }}" {{ 'selected' if booking.salesperson_id == sale.id else '' }}>
+          {{ sale.name }}
+        </option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <label>Tên khách
+    <input type="text" name="guest_name" value="{{ booking.guest_name or '' }}">
+  </label>
+  <label>Liên hệ
+    <input type="text" name="guest_contact" value="{{ booking.guest_contact or '' }}">
+  </label>
+
+  <label for="notes">Ghi chú
+    <textarea id="notes" name="notes" rows="5">{{ booking.notes or "" }}</textarea>
+  </label>
+
+  <label>Kênh
+    <select name="channel_id" required>
+      {% for ch in channels %}
+        <option value="{{ ch.id }}" {{ 'selected' if booking.channel_id == ch.id else '' }}>
+          {{ ch.channel_name }}
+        </option>
+      {% endfor %}
+    </select>
+  </label>
+
+  <div style="grid-column: 1 / -1; margin-top: 12px;">
+    <button class="btn" type="submit">Cập nhật</button>
+    <a href="/bookings/{{ booking.id }}/room-assignment" class="btn" style="margin-left: 8px; background: #17a2b8;">🏠 Quản lý phòng</a>
+  </div>
+</form>
+{% endblock %}

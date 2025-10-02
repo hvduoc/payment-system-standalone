@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2>Sửa Căn hộ</h2>
+<form method="post" action="/properties/edit/{{ property.id }}" class="form" style="max-width:500px;">
+  <label>Tên căn hộ (ngắn):</label>
+  <input type="text" name="property_name" value="{{ property.property_name }}" required>
+
+  <label>Tên trên Airbnb:</label>
+  <input type="text" name="airbnb_name" value="{{ property.airbnb_name or '' }}">
+
+  <label>Tòa nhà:</label>
+  <select name="building_id" required>
+    {% for b in buildings %}
+      <option value="{{ b.id }}" {% if b.id == property.building_id %}selected{% endif %}>{{ b.building_name }}</option>
+    {% endfor %}
+  </select>
+
+  <br><br>
+  <button type="submit" class="btn btn-blue">💾 Lưu</button>
+  <a href="/properties" class="btn btn-ghost">↩ Quay lại</a>
+</form>
+{% endblock %}

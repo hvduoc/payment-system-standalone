@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng nhập - Hệ thống Thu Chi Airbnb</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gradient-to-br from-green-400 to-blue-600 min-h-screen flex items-center justify-center">
+    <div class="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full mx-4">
+        <!-- Logo và Header -->
+        <div class="text-center mb-8">
+            <div class="mx-auto h-16 w-16 flex items-center justify-center rounded-full bg-green-100 mb-4">
+                <i class="fas fa-money-bill-wave text-green-600 text-2xl"></i>
+            </div>
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Thu Chi Airbnb</h1>
+            <p class="text-gray-600">Hệ thống quản lý thu chi chuyên nghiệp</p>
+            <div class="text-sm text-green-600 font-medium mt-2">
+                <i class="fas fa-database mr-1"></i>Production Version 2.0
+            </div>
+        </div>
+        
+        <!-- Form đăng nhập -->
+        <form id="loginForm" class="space-y-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-user mr-2"></i>Tên đăng nhập
+                </label>
+                <input type="text" id="username" required
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    <i class="fas fa-lock mr-2"></i>Mật khẩu
+                </label>
+                <input type="password" id="password" required
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent">
+            </div>
+            
+            <button type="submit" id="loginBtn" 
+                    class="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition duration-300 font-medium">
+                <i class="fas fa-sign-in-alt mr-2"></i>Đăng nhập
+            </button>
+        </form>
+        
+        <!-- Thông báo lỗi -->
+        <div id="errorAlert" class="hidden mt-4 p-4 bg-red-100 border border-red-300 rounded-lg">
+            <div class="flex items-center">
+                <i class="fas fa-exclamation-circle text-red-600 mr-2"></i>
+                <p class="text-red-700 text-sm" id="errorMessage"></p>
+            </div>
+        </div>
+        
+        <!-- Loading -->
+        <div id="loadingAlert" class="hidden mt-4 p-4 bg-blue-100 border border-blue-300 rounded-lg">
+            <div class="flex items-center">
+                <i class="fas fa-spinner fa-spin text-blue-600 mr-2"></i>
+                <p class="text-blue-700 text-sm">Đang đăng nhập...</p>
+            </div>
+        </div>
+        
+        <!-- Thông tin tài khoản demo -->
+        <div class="mt-8 p-4 bg-green-50 rounded-lg border border-green-200">
+            <h3 class="text-sm font-medium text-green-800 mb-3">
+                <i class="fas fa-info-circle mr-2"></i>Tài khoản có sẵn:
+            </h3>
+            <div class="space-y-2 text-xs text-green-700">
+                <div class="flex justify-between">
+                    <span><strong>Quản trị:</strong> admin</span>
+                    <span class="font-mono">admin123</span>
+                </div>
+                <div class="flex justify-between">
+                    <span><strong>Quản lý:</strong> manager1</span>
+                    <span class="font-mono">manager123</span>
+                </div>
+                <div class="flex justify-between">
+                    <span><strong>Trợ lý:</strong> assistant1</span>
+                    <span class="font-mono">assistant123</span>
+                </div>
+                <div class="flex justify-between">
+                    <span><strong>Kế toán:</strong> accountant</span>
+                    <span class="font-mono">account123</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tính năng mới -->
+        <div class="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 class="text-sm font-medium text-blue-800 mb-2">
+                <i class="fas fa-star mr-2"></i>Tính năng mới v2.0:
+            </h3>
+            <ul class="text-xs text-blue-700 space-y-1">
+                <li>✅ Database SQLite bền vững</li>
+                <li>✅ Quản lý user đa cấp</li>
+                <li>✅ Phân quyền theo vai trò</li>
+                <li>✅ Upload hình ảnh</li>
+                <li>✅ Bàn giao tiền mặt</li>
+                <li>✅ Ready for deployment</li>
+            </ul>
+        </div>
+        
+        <!-- Footer -->
+        <div class="mt-8 text-center text-xs text-gray-500">
+            <p>Phát triển bởi GitHub Copilot</p>
+            <p class="mt-1">
+                <i class="fas fa-shield-alt mr-1"></i>Bảo mật với JWT Token
+            </p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Auto focus username
+            document.getElementById('username').focus();
+            
+            // Enter key để submit
+            document.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+                }
+            });
+        });
+
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            // Hiện loading
+            showLoading();
+            hideError();
+            
+            const formData = new FormData();
+            formData.append('username', username);
+            formData.append('password', password);
+            
+            try {
+                const response = await axios.post('/api/login', formData);
+                
+                if (response.data.success) {
+                    // Hiển thị thông báo thành công
+                    showSuccess(`Chào mừng ${response.data.user.full_name}!`);
+                    
+                    // Redirect sau 1 giây
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 1000);
+                }
+                
+            } catch (error) {
+                hideLoading();
+                if (error.response && error.response.status === 401) {
+                    showError('Tên đăng nhập hoặc mật khẩu không đúng');
+                } else {
+                    showError('Có lỗi xảy ra. Vui lòng thử lại');
+                }
+            }
+        });
+
+        function showError(message) {
+            const errorAlert = document.getElementById('errorAlert');
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = message;
+            errorAlert.classList.remove('hidden');
+        }
+
+        function hideError() {
+            document.getElementById('errorAlert').classList.add('hidden');
+        }
+
+        function showLoading() {
+            document.getElementById('loadingAlert').classList.remove('hidden');
+            document.getElementById('loginBtn').disabled = true;
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingAlert').classList.add('hidden');
+            document.getElementById('loginBtn').disabled = false;
+        }
+
+        function showSuccess(message) {
+            hideLoading();
+            hideError();
+            
+            // Tạo alert thành công
+            const successAlert = document.createElement('div');
+            successAlert.className = 'mt-4 p-4 bg-green-100 border border-green-300 rounded-lg';
+            successAlert.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas fa-check-circle text-green-600 mr-2"></i>
+                    <p class="text-green-700 text-sm">${message}</p>
+                </div>
+            `;
+            
+            // Thêm vào form
+            document.getElementById('loginForm').appendChild(successAlert);
+        }
+    </script>
+</body>
+</html>

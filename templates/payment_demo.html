@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Ledger Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+    <!-- Login Modal -->
+    <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-8 max-w-md w-full mx-4">
+            <div class="text-center mb-6">
+                <div class="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-blue-100 mb-4">
+                    <i class="fas fa-money-bill-wave text-blue-600 text-xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-900">Payment Ledger Demo</h2>
+                <p class="text-gray-600">Simple payment tracking system</p>
+            </div>
+            
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <input type="text" id="username" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <input type="password" id="password" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700">
+                    <i class="fas fa-sign-in-alt mr-2"></i>Sign In
+                </button>
+            </form>
+            
+            <div class="mt-6 p-4 bg-blue-50 rounded-md">
+                <h3 class="text-sm font-medium text-blue-800 mb-2">Demo Accounts:</h3>
+                <div class="text-xs text-blue-700 space-y-1">
+                    <p><strong>Assistant:</strong> assistant / assistant123</p>
+                    <p><strong>Manager:</strong> manager / manager123</p>
+                    <p><strong>Owner:</strong> owner / owner123</p>
+                </div>
+            </div>
+            
+            <div id="loginError" class="hidden mt-4 p-3 bg-red-100 border border-red-300 rounded-md">
+                <p class="text-red-700 text-sm"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="mainApp" class="hidden">
+        <!-- Header -->
+        <header class="bg-white shadow-sm border-b">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <h1 class="text-xl font-semibold text-gray-900">
+                        <i class="fas fa-money-bill-wave text-green-600 mr-2"></i>
+                        Payment Ledger Demo
+                    </h1>
+                    <div class="flex items-center space-x-4">
+                        <span class="text-sm text-gray-500" id="currentUser"></span>
+                        <button onclick="logout()" class="text-sm text-red-600 hover:text-red-800">
+                            <i class="fas fa-sign-out-alt mr-1"></i>Logout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Navigation Tabs -->
+            <div class="border-b border-gray-200 mb-8">
+                <nav class="-mb-px flex space-x-8">
+                    <button onclick="showTab('dashboard')" class="tab-btn py-2 px-1 border-b-2 font-medium text-sm" data-tab="dashboard">
+                        <i class="fas fa-chart-line mr-2"></i>Dashboard
+                    </button>
+                    <button onclick="showTab('add-payment')" class="tab-btn py-2 px-1 border-b-2 font-medium text-sm" data-tab="add-payment">
+                        <i class="fas fa-plus-circle mr-2"></i>Add Payment
+                    </button>
+                    <button onclick="showTab('payments-list')" class="tab-btn py-2 px-1 border-b-2 font-medium text-sm" data-tab="payments-list">
+                        <i class="fas fa-list mr-2"></i>Payment History
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Dashboard Tab -->
+            <div id="dashboard-tab" class="tab-content">
+                <!-- KPI Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-green-100 rounded-lg">
+                                <i class="fas fa-money-bill text-green-600 text-xl"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-500">Total Collected</p>
+                                <p class="text-2xl font-semibold text-gray-900" id="totalCollected">-</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-blue-100 rounded-lg">
+                                <i class="fas fa-percentage text-blue-600 text-xl"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-500">Collection Rate</p>
+                                <p class="text-2xl font-semibold text-gray-900" id="collectionRate">-</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-yellow-100 rounded-lg">
+                                <i class="fas fa-wallet text-yellow-600 text-xl"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-500">Cash Balance</p>
+                                <p class="text-2xl font-semibold text-gray-900" id="cashBalance">-</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-lg shadow p-6">
+                        <div class="flex items-center">
+                            <div class="p-2 bg-purple-100 rounded-lg">
+                                <i class="fas fa-receipt text-purple-600 text-xl"></i>
+                            </div>
+                            <div class="ml-4">
+                                <p class="text-sm font-medium text-gray-500">Total Payments</p>
+                                <p class="text-2xl font-semibold text-gray-900" id="totalPayments">-</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Demo Info -->
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-8">
+                    <div class="flex items-center">
+                        <i class="fas fa-info-circle text-blue-600 mr-3"></i>
+                        <div>
+                            <h3 class="text-sm font-medium text-blue-800">Demo Mode</h3>
+                            <p class="text-sm text-blue-700">This is a simplified demo. Data is stored in memory and will reset when server restarts.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Payment Tab -->
+            <div id="add-payment-tab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h2 class="text-xl font-semibold mb-6">Add New Payment</h2>
+                    <form id="paymentForm" class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Booking ID <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text" id="bookingId" required
+                                       class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Guest Name <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text" id="guestName" required
+                                       class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Amount Due (VND) <span class="text-red-500">*</span>
+                                </label>
+                                <input type="number" id="amountDue" required min="0"
+                                       class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Amount Collected (VND) <span class="text-red-500">*</span>
+                                </label>
+                                <input type="number" id="amountCollected" required min="0"
+                                       class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Payment Method <span class="text-red-500">*</span>
+                                </label>
+                                <select id="paymentMethod" required
+                                        class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    <option value="">Select method</option>
+                                    <option value="cash">Cash</option>
+                                    <option value="bank_transfer">Bank Transfer</option>
+                                    <option value="airbnb_payout">Airbnb Payout</option>
+                                    <option value="momo">MoMo</option>
+                                    <option value="zalopay">ZaloPay</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Collected By <span class="text-red-500">*</span>
+                                </label>
+                                <input type="text" id="collectedBy" required
+                                       class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            </div>
+                            
+                            <div class="md:col-span-2">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">
+                                    Notes
+                                </label>
+                                <textarea id="notes" rows="3"
+                                          class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-end space-x-4">
+                            <button type="button" onclick="resetPaymentForm()"
+                                    class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">
+                                Clear
+                            </button>
+                            <button type="submit"
+                                    class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                                <i class="fas fa-save mr-2"></i>Save Payment
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Payments List Tab -->
+            <div id="payments-list-tab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow">
+                    <div class="p-6 border-b border-gray-200">
+                        <h2 class="text-xl font-semibold">Payment History</h2>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Booking ID</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Guest</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount Due</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Collected</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Method</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Collected By</th>
+                                </tr>
+                            </thead>
+                            <tbody id="paymentsTableBody" class="bg-white divide-y divide-gray-200">
+                                <!-- Data will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div id="toast" class="fixed top-4 right-4 z-50 hidden">
+        <div class="bg-white border border-gray-200 rounded-lg shadow-lg p-4 max-w-sm">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <i id="toastIcon" class="text-xl"></i>
+                </div>
+                <div class="ml-3">
+                    <p id="toastMessage" class="text-sm font-medium text-gray-900"></p>
+                </div>
+                <div class="ml-auto pl-3">
+                    <button onclick="hideToast()" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            showLoginModal();
+        });
+
+        function showLoginModal() {
+            document.getElementById('loginModal').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+        }
+
+        function hideLoginModal() {
+            document.getElementById('loginModal').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+        }
+
+        // Login form handler
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('username', document.getElementById('username').value);
+            formData.append('password', document.getElementById('password').value);
+            
+            try {
+                const response = await axios.post('/api/login', formData);
+                
+                if (response.data.success) {
+                    currentUser = response.data.user;
+                    document.getElementById('currentUser').textContent = `${currentUser.name} (${currentUser.role})`;
+                    hideLoginModal();
+                    showTab('dashboard');
+                    await loadDashboard();
+                }
+                
+            } catch (error) {
+                const errorDiv = document.getElementById('loginError');
+                errorDiv.classList.remove('hidden');
+                errorDiv.querySelector('p').textContent = 'Invalid credentials. Please try again.';
+            }
+        });
+
+        // Tab management
+        function showTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+            
+            document.getElementById(`${tabName}-tab`).classList.remove('hidden');
+            
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-blue-500', 'text-blue-600');
+                btn.classList.add('border-transparent', 'text-gray-500');
+            });
+            
+            document.querySelector(`[data-tab="${tabName}"]`).classList.remove('border-transparent', 'text-gray-500');
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('border-blue-500', 'text-blue-600');
+            
+            if (tabName === 'payments-list') {
+                loadPayments();
+            }
+        }
+
+        // Dashboard functions
+        async function loadDashboard() {
+            try {
+                const response = await axios.get('/api/dashboard');
+                const data = response.data;
+                
+                document.getElementById('totalCollected').textContent = formatCurrency(data.total_collected);
+                document.getElementById('collectionRate').textContent = `${data.collection_rate}%`;
+                document.getElementById('cashBalance').textContent = formatCurrency(data.cash_balance);
+                document.getElementById('totalPayments').textContent = data.total_payments;
+                
+            } catch (error) {
+                console.error('Failed to load dashboard:', error);
+            }
+        }
+
+        // Payment form handler
+        document.getElementById('paymentForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('booking_id', document.getElementById('bookingId').value);
+            formData.append('guest_name', document.getElementById('guestName').value);
+            formData.append('amount_due', document.getElementById('amountDue').value);
+            formData.append('amount_collected', document.getElementById('amountCollected').value);
+            formData.append('payment_method', document.getElementById('paymentMethod').value);
+            formData.append('collected_by', document.getElementById('collectedBy').value);
+            formData.append('notes', document.getElementById('notes').value);
+            
+            try {
+                const response = await axios.post('/api/payments', formData);
+                
+                if (response.data.success) {
+                    showToast('Payment saved successfully!', 'success');
+                    resetPaymentForm();
+                    await loadDashboard(); // Refresh dashboard
+                }
+                
+            } catch (error) {
+                showToast('Failed to save payment', 'error');
+            }
+        });
+
+        function resetPaymentForm() {
+            document.getElementById('paymentForm').reset();
+        }
+
+        async function loadPayments() {
+            try {
+                const response = await axios.get('/api/payments');
+                const payments = response.data.payments;
+                
+                const tbody = document.getElementById('paymentsTableBody');
+                tbody.innerHTML = '';
+                
+                payments.forEach(payment => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${formatDateTime(payment.timestamp)}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${payment.booking_id}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${payment.guest_name}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${formatCurrency(payment.amount_due)}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${formatCurrency(payment.amount_collected)}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${payment.payment_method}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            ${payment.collected_by}
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                
+            } catch (error) {
+                console.error('Failed to load payments:', error);
+            }
+        }
+
+        async function logout() {
+            try {
+                await axios.post('/api/logout');
+                currentUser = null;
+                showLoginModal();
+                
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        }
+
+        // Utility functions
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('vi-VN', {
+                style: 'currency',
+                currency: 'VND'
+            }).format(amount);
+        }
+
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString();
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toastIcon');
+            const messageEl = document.getElementById('toastMessage');
+            
+            messageEl.textContent = message;
+            
+            if (type === 'success') {
+                icon.className = 'fas fa-check-circle text-green-500 text-xl';
+            } else if (type === 'error') {
+                icon.className = 'fas fa-exclamation-circle text-red-500 text-xl';
+            } else {
+                icon.className = 'fas fa-info-circle text-blue-500 text-xl';
+            }
+            
+            toast.classList.remove('hidden');
+            
+            setTimeout(() => {
+                hideToast();
+            }, 5000);
+        }
+
+        function hideToast() {
+            document.getElementById('toast').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>

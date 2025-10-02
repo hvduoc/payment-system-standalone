@@ -1,0 +1,14 @@
+# Railway Configuration cho Payment System
+[build]
+  builder = "dockerfile"
+  dockerfilePath = "Dockerfile"
+
+[deploy]
+  restartPolicyType = "on_failure"
+  restartPolicyMaxRetries = 10
+
+# Environment variables sẽ được set trên Railway dashboard
+[env]
+  PORT = "8000"
+  DATABASE_URL = "${{PostgreSQL.DATABASE_URL}}"
+  SECRET_KEY = "${{SECRET_KEY}}"

@@ -1,0 +1,53 @@
+{% extends "layout.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2 class="mb-3">Nhập phụ phí theo tháng</h2>
+  <form id="extra-fees-form">
+    <div class="mb-3">
+      <label for="property_id" class="form-label">Căn hộ</label>
+      <input type="number" class="form-control" id="property_id" name="property_id" required>
+    </div>
+    <div class="mb-3">
+      <label for="month" class="form-label">Tháng</label>
+      <input type="month" class="form-control" id="month" name="month" required>
+    </div>
+    <div class="mb-3">
+      <label for="electricity" class="form-label">Tiền điện</label>
+      <input type="number" class="form-control" id="electricity" name="electricity" required>
+    </div>
+    <div class="mb-3">
+      <label for="water" class="form-label">Tiền nước</label>
+      <input type="number" class="form-control" id="water" name="water" required>
+    </div>
+    <div class="mb-3">
+      <label for="note" class="form-label">Ghi chú</label>
+      <textarea class="form-control" id="note" name="note"></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Lưu</button>
+  </form>
+</div>
+<script>
+  document.getElementById('extra-fees-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const form = e.target;
+    const payload = {
+      property_id: parseInt(form.property_id.value, 10),
+      month: form.month.value,
+      electricity: parseInt(form.electricity.value, 10),
+      water: parseInt(form.water.value, 10),
+      note: form.note.value
+    };
+    const res = await fetch('/extra_fees', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (res.ok) {
+      alert('Lưu thành công!');
+      form.reset();
+    } else {
+      alert('Lỗi khi lưu phụ phí!');
+    }
+  });
+</script>
+{% endblock %}

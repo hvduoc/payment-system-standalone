@@ -1,0 +1,55 @@
+{% extends "layout.html" %}
+{% block content %}
+<h1>Quản lý Nhân viên Sale</h1>
+<p class="muted"><a href="/bookings">← Quay lại danh sách booking</a></p>
+
+<div style="display: grid; grid-template-columns: 1fr 2fr; gap: 40px; margin-top: 24px;">
+
+  <div>
+    <h2>Thêm Sale mới</h2>
+   <form method="post" action="/salespeople/new" style="display: flex; flex-direction: column; gap: 16px;">
+    <label>Tên nhân viên
+        <input type="text" name="name" required placeholder="Nguyễn Văn A">
+    </label>
+    <label>Email
+        <input type="email" name="email" placeholder="email@example.com">
+    </label>
+    <label>Số điện thoại
+        <input type="text" name="phone" placeholder="0905123456">
+    </label>
+    <label>Tỷ lệ hoa hồng (%)
+        <input type="number" name="commission_rate_pct" required step="0.1" placeholder="Ví dụ: 5.5">
+    </label>
+    <button class="btn" type="submit">Thêm nhân viên</button>
+    </form>
+  </div>
+
+  <div>
+    <h2>Danh sách hiện tại</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+            <tr>
+            <th>Tên nhân viên</th>
+            <th>Thông tin liên hệ</th> <th class="num">Tỷ lệ hoa hồng</th>
+            <th>Trạng thái</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in salespeople %}
+            <tr>
+            <td>{{ s.name }}</td>
+            <td>
+                {% if s.email %}{{ s.email }}{% endif %}<br>
+                {% if s.phone %}{{ s.phone }}{% endif %}
+            </td>
+            <td class="num">{{ "%.1f"|format(s.commission_rate * 100) }}%</td>
+            <td>{{ "Đang hoạt động" if s.is_active else "Đã nghỉ" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hệ thống Thu Chi Airbnb - Debug</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+    <!-- Debug Header -->
+    <header class="bg-red-100 border-b-2 border-red-300 p-4">
+        <div class="max-w-7xl mx-auto">
+            <h1 class="text-lg font-bold text-red-800">
+                <i class="fas fa-bug mr-2"></i>DEBUG MODE - Payment Ledger
+            </h1>
+            <p class="text-sm text-red-600">Authentication debugging in progress...</p>
+        </div>
+    </header>
+
+    <!-- Debug Info -->
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">🔍 Authentication Debug</h2>
+            <div id="debugInfo" class="space-y-2 text-sm font-mono">
+                <p>Đang kiểm tra...</p>
+            </div>
+        </div>
+
+        <!-- User Info -->
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">👤 User Information</h2>
+            <div id="userInfo" class="text-sm">
+                <p>Chờ load...</p>
+            </div>
+        </div>
+
+        <!-- Simple Dashboard -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-xl font-semibold mb-4">📊 Dashboard Test</h2>
+            <div id="dashboardInfo" class="text-sm">
+                <p>Chờ load...</p>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="mt-6 flex space-x-4">
+            <button onclick="testAuth()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                Test Authentication
+            </button>
+            <button onclick="testDashboard()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
+                Test Dashboard
+            </button>
+            <button onclick="logout()" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+                Logout
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let debugLog = [];
+
+        function addDebugLog(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            debugLog.push(`[${timestamp}] ${message}`);
+            updateDebugDisplay();
+        }
+
+        function updateDebugDisplay() {
+            const debugDiv = document.getElementById('debugInfo');
+            debugDiv.innerHTML = debugLog.map(log => `<p class="text-gray-700">${log}</p>`).join('');
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            addDebugLog('🚀 Page loaded, starting authentication check...');
+            testAuth();
+        });
+
+        async function testAuth() {
+            addDebugLog('🔐 Testing authentication...');
+            
+            try {
+                const response = await axios.get('/api/test-auth');
+                addDebugLog(`✅ Auth response: ${JSON.stringify(response.data)}`);
+                
+                const userDiv = document.getElementById('userInfo');
+                if (response.data.status === 'authenticated') {
+                    userDiv.innerHTML = `
+                        <div class="text-green-700">
+                            <p><strong>✅ Authenticated!</strong></p>
+                            <p>ID: ${response.data.user.id}</p>
+                            <p>Username: ${response.data.user.username}</p>
+                            <p>Name: ${response.data.user.full_name}</p>
+                            <p>Role: ${response.data.user.role}</p>
+                        </div>
+                    `;
+                    
+                    // Auto test dashboard
+                    setTimeout(testDashboard, 1000);
+                } else {
+                    userDiv.innerHTML = `
+                        <div class="text-red-700">
+                            <p><strong>❌ Not authenticated</strong></p>
+                            <p>Status: ${response.data.status}</p>
+                            <p><a href="/login" class="text-blue-600 underline">Go to Login</a></p>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                addDebugLog(`❌ Auth error: ${error.message}`);
+                const userDiv = document.getElementById('userInfo');
+                userDiv.innerHTML = `
+                    <div class="text-red-700">
+                        <p><strong>❌ Error:</strong> ${error.message}</p>
+                        <p><a href="/login" class="text-blue-600 underline">Go to Login</a></p>
+                    </div>
+                `;
+            }
+        }
+
+        async function testDashboard() {
+            addDebugLog('📊 Testing dashboard...');
+            
+            try {
+                const response = await axios.get('/api/dashboard');
+                addDebugLog(`✅ Dashboard response: ${JSON.stringify(response.data)}`);
+                
+                const dashboardDiv = document.getElementById('dashboardInfo');
+                dashboardDiv.innerHTML = `
+                    <div class="text-green-700">
+                        <p><strong>✅ Dashboard loaded!</strong></p>
+                        <p>Total Collected: ${formatCurrency(response.data.total_collected)}</p>
+                        <p>Collection Rate: ${response.data.collection_rate}%</p>
+                        <p>Total Payments: ${response.data.total_payments}</p>
+                        <p>Total Handovers: ${response.data.total_handovers}</p>
+                    </div>
+                `;
+                
+            } catch (error) {
+                addDebugLog(`❌ Dashboard error: ${error.message}`);
+                const dashboardDiv = document.getElementById('dashboardInfo');
+                dashboardDiv.innerHTML = `
+                    <div class="text-red-700">
+                        <p><strong>❌ Dashboard Error:</strong> ${error.message}</p>
+                        <p>Status: ${error.response?.status}</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function logout() {
+            try {
+                await axios.post('/api/logout');
+                addDebugLog('🚪 Logged out, redirecting...');
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 1000);
+            } catch (error) {
+                addDebugLog(`❌ Logout error: ${error.message}`);
+            }
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('vi-VN', {
+                style: 'currency',
+                currency: 'VND'
+            }).format(amount);
+        }
+    </script>
+</body>
+</html>
