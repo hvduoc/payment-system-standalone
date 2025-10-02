@@ -483,7 +483,11 @@ async def admin_users_page(
     if current_user.role != "owner":
         raise HTTPException(status_code=403, detail="Chỉ chủ sở hữu mới có quyền truy cập")
     
-    return templates.TemplateResponse("admin_users.html", {"request": request})
+    return templates.TemplateResponse("admin_users.html", {
+        "request": request, 
+        "user": current_user,
+        "getVietnamTime": get_vietnam_time
+    })
 
 @app.post("/api/admin/users")
 async def create_new_user(
