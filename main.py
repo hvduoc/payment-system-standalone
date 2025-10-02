@@ -140,29 +140,19 @@ async def debug_page(request: Request):
     """Debug authentication page"""
     return templates.TemplateResponse("debug_auth.html", {"request": request})
 
-@app.get("/api/test-auth")
-async def test_auth(request: Request, db: Session = Depends(get_db)):
-    """Test authentication"""
-    token = request.cookies.get("access_token")
-    if not token:
-        return {"status": "no_token"}
+@app.get("/api/time-info")
+async def get_time_info():
+    """Get current time information"""
+    vietnam_time = get_vietnam_time()
+    utc_time = datetime.utcnow()
     
-    try:
-        user = get_current_user_from_token(token, db)
-        if user:
-            return {
-                "status": "authenticated",
-                "user": {
-                    "id": user.id,
-                    "username": user.username,
-                    "full_name": user.full_name,
-                    "role": user.role
-                }
-            }
-        else:
-            return {"status": "invalid_token"}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    return {
+        "vietnam_time": vietnam_time.isoformat(),
+        "vietnam_time_formatted": vietnam_time.strftime("%H:%M:%S %d/%m/%Y"),
+        "utc_time": utc_time.isoformat(),
+        "timezone": "Asia/Ho_Chi_Minh",
+        "timezone_offset": "+07:00"
+    }
 
 @app.post("/api/login")
 async def login(
