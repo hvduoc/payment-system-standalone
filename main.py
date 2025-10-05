@@ -141,6 +141,17 @@ async def root(request: Request, db: Session = Depends(get_db)):
     # Redirect to login if no valid token
     return RedirectResponse(url="/login")
 
+# Legacy route redirects for backward compatibility
+@app.get("/payments")
+async def redirect_payments():
+    """Redirect old /payments route to new /admin/payments"""
+    return RedirectResponse(url="/admin/payments", status_code=301)
+
+@app.get("/handovers") 
+async def redirect_handovers():
+    """Redirect old /handovers route to new /admin/handovers"""
+    return RedirectResponse(url="/admin/handovers", status_code=301)
+
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
     """Trang đăng nhập"""
