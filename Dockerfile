@@ -39,5 +39,5 @@ ENV PYTHONUNBUFFERED=1
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/debug/users')" || exit 1
 
-# Command to run the application directly
-CMD ["sh", "-c", "python -m uvicorn main:app --host 0.0.0.0 --port $PORT"]
+# Command to run the application with user initialization
+CMD ["sh", "-c", "python init_railway_users.py && python -m uvicorn main:app --host 0.0.0.0 --port $PORT"]

@@ -173,9 +173,22 @@ async def login(
     db: Session = Depends(get_db)
 ):
     """Đăng nhập API"""
+    print(f"🔐 Login attempt: {username}")
+    
+    # Check if user exists
+    user_check = db.query(User).filter(User.username == username).first()
+    if not user_check:
+        print(f"❌ User not found: {username}")
+        raise HTTPException(status_code=401, detail="Thông tin đăng nhập không đúng")
+    
+    print(f"👤 User found: {username}, role: {user_check.role}")
+    
     user = authenticate_user(db, username, password)
     if not user:
+        print(f"❌ Authentication failed: {username}")
         raise HTTPException(status_code=401, detail="Thông tin đăng nhập không đúng")
+    
+    print(f"✅ Authentication successful: {username}")
     
     # Tạo access token
     access_token_expires = timedelta(minutes=1440)  # 24 giờ
@@ -1366,6 +1379,53 @@ async def admin_reports_page(
         "user": current_user,
         "getVietnamTime": get_vietnam_time
     })
+
+# Debug endpoints for production troubleshooting
+@app.get("/debug/users")
+async def debug_users(db: Session = Depends(get_db)):
+    """Debug endpoint để check users trong database"""
+    try:
+        users = db.query(User).all()
+        user_list = []
+        for user in users:
+            user_list.append({
+                "id": user.id,
+                "username": user.username,
+                "role": user.role,
+                "full_name": user.full_name,
+                "is_active": user.is_active,
+                "password_hash": user.password_hash[:20] + "..." if user.password_hash else None
+            })
+        
+        return {
+            "total_users": len(users),
+            "users": user_list,
+            "database_type": "PostgreSQL" if os.getenv("DATABASE_URL") else "SQLite"
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/debug/test-auth/{username}/{password}")
+async def debug_test_auth(username: str, password: str, db: Session = Depends(get_db)):
+    """Debug endpoint để test authentication"""
+    try:
+        print(f"🧪 Testing auth for: {username}")
+        user = authenticate_user(db, username, password)
+        
+        if user:
+            return {
+                "success": True,
+                "user": {
+                    "username": user.username,
+                    "role": user.role,
+                    "full_name": user.full_name
+                }
+            }
+        else:
+            return {"success": False, "message": "Authentication failed"}
+            
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 # Khởi động server - Railway compatibility
 if __name__ == "__main__":
