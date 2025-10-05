@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>{% block title %}Hệ thống Thu Chi Airbnb{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    {% block extra_head %}{% endblock %}
+    
+    <style>
+        /* Mobile-first CSS */
+        * {
+            -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        /* Touch-friendly navigation */
+        .nav-item {
+            min-height: 48px;
+            display: flex;
+            align-items: center;
+        }
+        
+        /* Mobile navigation */
+        @media (max-width: 768px) {
+            .desktop-nav {
+                display: none;
+            }
+            
+            .mobile-nav {
+                display: block;
+            }
+            
+            .nav-item {
+                padding: 12px 16px;
+                border-radius: 8px;
+                margin: 2px 0;
+            }
+        }
+        
+        @media (min-width: 769px) {
+            .desktop-nav {
+                display: flex;
+            }
+            
+            .mobile-nav {
+                display: none;
+            }
+        }
+        
+        /* Better scrolling on mobile */
+        .scroll-smooth {
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 scroll-smooth">
+    <!-- Mobile Navigation Header -->
+    <nav class="bg-white shadow-sm border-b-2 border-green-500 sticky top-0 z-50">
+        <div class="container mx-auto px-4">
+            <!-- Desktop Navigation -->
+            <div class="desktop-nav justify-between items-center py-4">
+                <!-- Logo/Brand -->
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-money-bill-wave text-green-600 text-2xl"></i>
+                    <div>
+                        <h1 class="text-xl font-bold text-gray-800">Hệ thống Thu Chi Airbnb</h1>
+                        <p class="text-xs text-gray-500">Standalone Payment Management</p>
+                    </div>
+                </div>
+                
+                <!-- Desktop Navigation Links -->
+                <div class="flex items-center space-x-6">
+                    {% set path = request.url.path if request.url else '/' %}
+                    
+                    <a href="/" class="nav-item px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 {{ 'bg-green-100 text-green-700' if path == '/' else '' }}">
+                        <i class="fas fa-chart-line mr-2"></i>Dashboard
+                    </a>
+                    
+                    <a href="/admin/payments" class="nav-item px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 {{ 'bg-green-100 text-green-700' if 'payments' in path else '' }}">
+                        <i class="fas fa-receipt mr-2"></i>Ghi nhận thu
+                    </a>
+                    
+                    <a href="/admin/handovers" class="nav-item px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 {{ 'bg-green-100 text-green-700' if 'handovers' in path else '' }}">
+                        <i class="fas fa-handshake mr-2"></i>Bàn giao
+                    </a>
+                    
+                    <a href="/admin/reports" class="nav-item px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 {{ 'bg-green-100 text-green-700' if 'reports' in path else '' }}">
+                        <i class="fas fa-chart-bar mr-2"></i>Báo cáo
+                    </a>
+                    
+                    {% if user and user.role == 'owner' %}
+                    <a href="/admin/users" class="nav-item px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 {{ 'bg-green-100 text-green-700' if 'users' in path else '' }}">
+                        <i class="fas fa-users mr-2"></i>Đội ngũ
+                    </a>
+                    {% endif %}
+                </div>
+                
+                <!-- Desktop User Info -->
+                <div class="flex items-center space-x-4">
+                    {% if user %}
+                    <div class="text-right">
+                        <p class="text-sm font-medium text-gray-700">{{ user.full_name }}</p>
+                        <p class="text-xs text-gray-500">{{ getRoleDisplayName(user.role) if getRoleDisplayName else user.role }}</p>
+                    </div>
+                    <div class="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-white font-medium">
+                        {{ user.full_name[0] if user.full_name else 'U' }}
+                    </div>
+                    <a href="/api/logout" class="text-red-600 hover:text-red-800 flex items-center">
+                        <i class="fas fa-sign-out-alt mr-1"></i>Đăng xuất
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Mobile Navigation -->
+            <div class="mobile-nav">
+                <div class="flex justify-between items-center py-3">
+                    <!-- Mobile Logo -->
+                    <div class="flex items-center space-x-2">
+                        <i class="fas fa-money-bill-wave text-green-600 text-xl"></i>
+                        <div>
+                            <h1 class="text-lg font-bold text-gray-800">Thu Chi Airbnb</h1>
+                            <p class="text-xs text-gray-500">Standalone</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Mobile Menu Button -->
+                    <button id="mobileMenuBtn" class="p-2 rounded-lg hover:bg-gray-100">
+                        <i class="fas fa-bars text-xl text-gray-700"></i>
+                    </button>
+                    
+                    <!-- Mobile User Avatar -->
+                    {% if user %}
+                    <div class="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center text-white font-medium text-sm">
+                        {{ user.full_name[0] if user.full_name else 'U' }}
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Mobile Menu -->
+                <div id="mobileMenu" class="hidden pb-4">
+                    <div class="space-y-1">
+                        <a href="/" class="nav-item block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg {{ 'bg-green-100 text-green-700' if path == '/' else '' }}">
+                            <i class="fas fa-chart-line mr-3 w-5"></i>Dashboard
+                        </a>
+                        
+                        <a href="/admin/payments" class="nav-item block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg {{ 'bg-green-100 text-green-700' if 'payments' in path else '' }}">
+                            <i class="fas fa-receipt mr-3 w-5"></i>Ghi nhận thu
+                        </a>
+                        
+                        <a href="/admin/handovers" class="nav-item block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg {{ 'bg-green-100 text-green-700' if 'handovers' in path else '' }}">
+                            <i class="fas fa-handshake mr-3 w-5"></i>Bàn giao
+                        </a>
+                        
+                        <a href="/admin/reports" class="nav-item block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg {{ 'bg-green-100 text-green-700' if 'reports' in path else '' }}">
+                            <i class="fas fa-chart-bar mr-3 w-5"></i>Báo cáo
+                        </a>
+                        
+                        {% if user and user.role == 'owner' %}
+                        <a href="/admin/users" class="nav-item block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg {{ 'bg-green-100 text-green-700' if 'users' in path else '' }}">
+                            <i class="fas fa-users mr-3 w-5"></i>Đội ngũ
+                        </a>
+                        {% endif %}
+                        
+                        <hr class="my-2">
+                        
+                        {% if user %}
+                        <div class="px-4 py-2">
+                            <p class="text-sm font-medium text-gray-700">{{ user.full_name }}</p>
+                            <p class="text-xs text-gray-500">{{ getRoleDisplayName(user.role) if getRoleDisplayName else user.role }}</p>
+                        </div>
+                        
+                        <a href="/api/logout" class="nav-item block px-4 py-3 text-red-600 hover:bg-red-50 rounded-lg">
+                            <i class="fas fa-sign-out-alt mr-3 w-5"></i>Đăng xuất
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="min-h-screen">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t mt-8">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex justify-between items-center">
+                <div class="text-sm text-gray-600">
+                    © 2025 Hệ thống Thu Chi Airbnb - Standalone Version
+                </div>
+                <div class="flex items-center space-x-4 text-sm text-gray-500">
+                    <span><i class="fas fa-clock mr-1"></i>{{ getVietnamTime().strftime('%H:%M:%S %d/%m/%Y') if getVietnamTime else '' }}</span>
+                    <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">v2.0 Production</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    {% block extra_scripts %}{% endblock %}
+
+    <script>
+        // Mobile menu toggle
+        document.addEventListener('DOMContentLoaded', function() {
+            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+            const mobileMenu = document.getElementById('mobileMenu');
+            const menuIcon = mobileMenuBtn.querySelector('i');
+            
+            mobileMenuBtn.addEventListener('click', function() {
+                mobileMenu.classList.toggle('hidden');
+                
+                // Toggle icon
+                if (mobileMenu.classList.contains('hidden')) {
+                    menuIcon.classList.remove('fa-times');
+                    menuIcon.classList.add('fa-bars');
+                } else {
+                    menuIcon.classList.remove('fa-bars');
+                    menuIcon.classList.add('fa-times');
+                }
+            });
+            
+            // Close menu when clicking outside
+            document.addEventListener('click', function(event) {
+                if (!mobileMenuBtn.contains(event.target) && !mobileMenu.contains(event.target)) {
+                    mobileMenu.classList.add('hidden');
+                    menuIcon.classList.remove('fa-times');
+                    menuIcon.classList.add('fa-bars');
+                }
+            });
+            
+            // Close menu when clicking nav links
+            const navLinks = mobileMenu.querySelectorAll('a');
+            navLinks.forEach(link => {
+                link.addEventListener('click', function() {
+                    mobileMenu.classList.add('hidden');
+                    menuIcon.classList.remove('fa-times');
+                    menuIcon.classList.add('fa-bars');
+                });
+            });
+        });
+
+        // Auto-update time
+        function updateTime() {
+            const timeElements = document.querySelectorAll('[data-time="current"]');
+            const now = new Date();
+            const timeString = now.toLocaleString('vi-VN', {
+                timeZone: 'Asia/Ho_Chi_Minh',
+                hour: '2-digit',
+                minute: '2-digit', 
+                second: '2-digit',
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+            
+            timeElements.forEach(el => {
+                el.textContent = timeString;
+            });
+        }
+
+        // Update time every second
+        setInterval(updateTime, 1000);
+        updateTime();
+        
+        // PWA-like features
+        if ('serviceWorker' in navigator) {
+            // Add to home screen prompt
+            let deferredPrompt;
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                
+                // Show install button after some usage
+                setTimeout(() => {
+                    if (deferredPrompt) {
+                        const installHint = document.createElement('div');
+                        installHint.className = 'fixed bottom-4 right-4 bg-green-600 text-white p-3 rounded-lg shadow-lg z-50 text-sm max-w-xs';
+                        installHint.innerHTML = `
+                            <div class="flex items-center justify-between">
+                                <span>📱 Cài đặt ứng dụng lên màn hình chính?</span>
+                                <button id="installBtn" class="ml-2 px-2 py-1 bg-white text-green-600 rounded text-xs">Cài</button>
+                                <button id="dismissBtn" class="ml-1 text-white">✕</button>
+                            </div>
+                        `;
+                        document.body.appendChild(installHint);
+                        
+                        document.getElementById('installBtn').addEventListener('click', () => {
+                            deferredPrompt.prompt();
+                            deferredPrompt.userChoice.then(() => {
+                                deferredPrompt = null;
+                                installHint.remove();
+                            });
+                        });
+                        
+                        document.getElementById('dismissBtn').addEventListener('click', () => {
+                            installHint.remove();
+                        });
+                    }
+                }, 10000); // Show after 10 seconds
+            });
+        }
+    </script>
+</body>
+</html>

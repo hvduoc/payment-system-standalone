@@ -18,7 +18,7 @@ import shutil
 import pytz
 
 # Import các module tự tạo
-from database_production import get_db, create_tables, User, Payment, Handover  
+from database_production import get_db, create_tables, User, Payment, Handover, Building  
 
 # Try simple auth first, fallback to original if needed
 try:
@@ -112,15 +112,18 @@ async def root(request: Request, db: Session = Depends(get_db)):
         user = get_current_user_from_token(token, db)
         if user:
             print(f"Valid user found: {user.username}")
-            return templates.TemplateResponse("payment_complete.html", {
+            
+            # Get dashboard data
+            recent_payments = db.query(Payment).order_by(Payment.created_at.desc()).limit(5).all()
+            recent_handovers = db.query(Handover).order_by(Handover.created_at.desc()).limit(5).all()
+            
+            return templates.TemplateResponse("dashboard_mobile.html", {
                 "request": request,
-                "user": {
-                    "id": user.id,
-                    "username": user.username,
-                    "full_name": user.full_name,
-                    "role": user.role
-                },
-                "getRoleDisplayName": get_role_display_name_helper
+                "user": user,
+                "recent_payments": recent_payments,
+                "recent_handovers": recent_handovers,
+                "getRoleDisplayName": get_role_display_name_helper,
+                "getVietnamTime": get_vietnam_time
             })
         else:
             print("Token verification failed: user not found")
@@ -197,6 +200,8 @@ async def add_payment(
     request: Request,
     booking_id: str = Form(...),
     guest_name: str = Form(...),
+    room_number: str = Form(default=""),
+    building_id: int = Form(default=None),
     amount_due: float = Form(...),
     amount_collected: float = Form(...),
     payment_method: str = Form(...),
@@ -224,6 +229,8 @@ async def add_payment(
     payment = Payment(
         booking_id=booking_id,
         guest_name=guest_name,
+        room_number=room_number,
+        building_id=building_id if building_id else None,
         amount_due=amount_due,
         amount_collected=amount_collected,
         payment_method=payment_method,
@@ -283,6 +290,8 @@ async def get_payments(
             "id": payment.id,
             "booking_id": payment.booking_id,
             "guest_name": payment.guest_name,
+            "room_number": payment.room_number,
+            "building_id": payment.building_id,
             "amount_due": payment.amount_due,
             "amount_collected": payment.amount_collected,
             "payment_method": payment.payment_method,
@@ -465,10 +474,313 @@ async def get_recipients(
     
     return {"recipients": recipients_data}
 
+# CRUD Operations for Payments
+@app.put("/api/payments/{payment_id}")
+async def update_payment(
+    payment_id: int,
+    booking_id: str = Form(...),
+    guest_name: str = Form(...),
+    room_number: str = Form(default=""),
+    building_id: int = Form(default=None),
+    amount_due: float = Form(...),
+    amount_collected: float = Form(...),
+    payment_method: str = Form(...),
+    collected_by: str = Form(...),
+    notes: str = Form(default=""),
+    receipt_image: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Cập nhật payment record"""
+    
+    # Tìm payment
+    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Không tìm thấy khoản thu")
+    
+    # Kiểm tra quyền edit (owner, manager có thể edit tất cả, assistant chỉ edit của mình)
+    if current_user.role == "assistant" and payment.added_by_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Không có quyền chỉnh sửa khoản thu này")
+    
+    # Xử lý upload hình ảnh mới (nếu có)
+    if receipt_image and receipt_image.filename:
+        file_extension = receipt_image.filename.split('.')[-1]
+        unique_filename = f"receipt_{uuid.uuid4()}.{file_extension}"
+        image_path = os.path.join(UPLOAD_DIR, unique_filename)
+        
+        with open(image_path, "wb") as buffer:
+            shutil.copyfileobj(receipt_image.file, buffer)
+        
+        payment.receipt_image = f"/uploads/{unique_filename}"
+    
+    # Cập nhật thông tin
+    payment.booking_id = booking_id
+    payment.guest_name = guest_name
+    payment.room_number = room_number
+    payment.building_id = building_id
+    payment.amount_due = amount_due
+    payment.amount_collected = amount_collected
+    payment.payment_method = payment_method
+    payment.collected_by = collected_by
+    payment.notes = notes
+    payment.updated_at = get_vietnam_time().replace(tzinfo=None)
+    
+    db.commit()
+    db.refresh(payment)
+    
+    return {"success": True, "message": "Cập nhật thành công", "payment_id": payment.id}
+
+@app.delete("/api/payments/{payment_id}")
+async def delete_payment(
+    payment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Xóa payment record"""
+    
+    # Tìm payment
+    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Không tìm thấy khoản thu")
+    
+    # Kiểm tra quyền xóa (chỉ owner và manager)
+    if current_user.role not in ["owner", "manager"]:
+        raise HTTPException(status_code=403, detail="Không có quyền xóa khoản thu")
+    
+    db.delete(payment)
+    db.commit()
+    
+    return {"success": True, "message": "Xóa khoản thu thành công"}
+
+@app.get("/api/payments/{payment_id}")
+async def get_payment_detail(
+    payment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Lấy chi tiết payment để edit"""
+    
+    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    if not payment:
+        raise HTTPException(status_code=404, detail="Không tìm thấy khoản thu")
+    
+    # Kiểm tra quyền xem
+    if current_user.role == "assistant" and payment.added_by_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Không có quyền xem khoản thu này")
+    
+    return {
+        "id": payment.id,
+        "booking_id": payment.booking_id,
+        "guest_name": payment.guest_name,
+        "room_number": payment.room_number or "",
+        "building_id": payment.building_id,
+        "amount_due": payment.amount_due,
+        "amount_collected": payment.amount_collected,
+        "payment_method": payment.payment_method,
+        "collected_by": payment.collected_by,
+        "notes": payment.notes or "",
+        "receipt_image": payment.receipt_image,
+        "status": payment.status,
+        "created_at": payment.created_at.isoformat() if payment.created_at else None
+    }
+
+# CRUD Operations for Handovers
+@app.put("/api/handovers/{handover_id}")
+async def update_handover(
+    handover_id: int,
+    from_person: str = Form(...),
+    to_person: str = Form(...),
+    amount: float = Form(...),
+    building_id: int = Form(default=None),
+    notes: str = Form(default=""),
+    handover_image: Optional[UploadFile] = File(None),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Cập nhật handover record"""
+    
+    handover = db.query(Handover).filter(Handover.id == handover_id).first()
+    if not handover:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bàn giao")
+    
+    # Kiểm tra quyền edit
+    if current_user.role == "assistant" and handover.handover_by_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Không có quyền chỉnh sửa bàn giao này")
+    
+    # Xử lý upload hình ảnh mới
+    if handover_image and handover_image.filename:
+        file_extension = handover_image.filename.split('.')[-1]
+        unique_filename = f"handover_{uuid.uuid4()}.{file_extension}"
+        image_path = os.path.join(UPLOAD_DIR, unique_filename)
+        
+        with open(image_path, "wb") as buffer:
+            shutil.copyfileobj(handover_image.file, buffer)
+        
+        handover.image_path = f"/uploads/{unique_filename}"
+    
+    # Cập nhật thông tin
+    handover.from_person = from_person
+    handover.to_person = to_person
+    handover.amount = amount
+    handover.building_id = building_id
+    handover.notes = notes
+    handover.updated_at = get_vietnam_time().replace(tzinfo=None)
+    
+    db.commit()
+    db.refresh(handover)
+    
+    return {"success": True, "message": "Cập nhật thành công", "handover_id": handover.id}
+
+@app.delete("/api/handovers/{handover_id}")
+async def delete_handover(
+    handover_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Xóa handover record"""
+    
+    handover = db.query(Handover).filter(Handover.id == handover_id).first()
+    if not handover:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bàn giao")
+    
+    # Kiểm tra quyền xóa
+    if current_user.role not in ["owner", "manager"]:
+        raise HTTPException(status_code=403, detail="Không có quyền xóa bàn giao")
+    
+    db.delete(handover)
+    db.commit()
+    
+    return {"success": True, "message": "Xóa bàn giao thành công"}
+
+@app.get("/api/handovers/{handover_id}")
+async def get_handover_detail(
+    handover_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Lấy chi tiết handover để edit"""
+    
+    handover = db.query(Handover).filter(Handover.id == handover_id).first()
+    if not handover:
+        raise HTTPException(status_code=404, detail="Không tìm thấy bàn giao")
+    
+    return {
+        "id": handover.id,
+        "from_person": handover.from_person,
+        "to_person": handover.to_person,
+        "amount": handover.amount,
+        "building_id": handover.building_id,
+        "notes": handover.notes or "",
+        "image_path": handover.image_path,
+        "status": handover.status,
+        "created_at": handover.created_at.isoformat() if handover.created_at else None
+    }
+
+# Building Management APIs
+@app.get("/api/buildings")
+async def get_buildings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Lấy danh sách tòa nhà"""
+    
+    buildings = db.query(Building).filter(Building.is_active == True).all()
+    buildings_data = []
+    
+    for building in buildings:
+        buildings_data.append({
+            "id": building.id,
+            "name": building.name,
+            "address": building.address,
+            "description": building.description
+        })
+    
+    return {"buildings": buildings_data}
+
+@app.post("/api/buildings")
+async def create_building(
+    name: str = Form(...),
+    address: str = Form(default=""),
+    description: str = Form(default=""),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Tạo tòa nhà mới (chỉ owner)"""
+    
+    if current_user.role != "owner":
+        raise HTTPException(status_code=403, detail="Chỉ chủ sở hữu mới có quyền tạo tòa nhà")
+    
+    building = Building(
+        name=name,
+        address=address,
+        description=description,
+        is_active=True
+    )
+    
+    db.add(building)
+    db.commit()
+    db.refresh(building)
+    
+    return {"success": True, "building_id": building.id, "message": "Tạo tòa nhà thành công"}
+
+@app.put("/api/buildings/{building_id}")
+async def update_building(
+    building_id: int,
+    name: str = Form(...),
+    address: str = Form(default=""),
+    description: str = Form(default=""),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Cập nhật tòa nhà (chỉ owner)"""
+    
+    if current_user.role != "owner":
+        raise HTTPException(status_code=403, detail="Chỉ chủ sở hữu mới có quyền chỉnh sửa tòa nhà")
+    
+    building = db.query(Building).filter(Building.id == building_id).first()
+    if not building:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tòa nhà")
+    
+    building.name = name
+    building.address = address
+    building.description = description
+    building.updated_at = get_vietnam_time().replace(tzinfo=None)
+    
+    db.commit()
+    db.refresh(building)
+    
+    return {"success": True, "message": "Cập nhật tòa nhà thành công"}
+
+@app.delete("/api/buildings/{building_id}")
+async def delete_building(
+    building_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Xóa tòa nhà (chỉ owner)"""
+    
+    if current_user.role != "owner":
+        raise HTTPException(status_code=403, detail="Chỉ chủ sở hữu mới có quyền xóa tòa nhà")
+    
+    building = db.query(Building).filter(Building.id == building_id).first()
+    if not building:
+        raise HTTPException(status_code=404, detail="Không tìm thấy tòa nhà")
+    
+    # Kiểm tra xem có payment nào đang sử dụng building này không
+    payments_count = db.query(Payment).filter(Payment.building_id == building_id).count()
+    if payments_count > 0:
+        raise HTTPException(status_code=400, detail=f"Không thể xóa tòa nhà này vì đang có {payments_count} khoản thu sử dụng")
+    
+    db.delete(building)
+    db.commit()
+    
+    return {"success": True, "message": "Xóa tòa nhà thành công"}
+
 @app.post("/api/logout")
+@app.get("/api/logout")
 async def logout(request: Request):
-    """Đăng xuất"""
-    response = JSONResponse({"success": True})
+    """Đăng xuất - hỗ trợ cả GET và POST"""
+    response = RedirectResponse(url="/login", status_code=302)
     response.delete_cookie("access_token")
     return response
 
@@ -1006,3 +1318,43 @@ async def debug_fix_auth(db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         return {"status": "error", "message": str(e)}
+
+# Admin Routes - Payments and Handovers
+@app.get("/admin/payments", response_class=HTMLResponse)
+async def admin_payments_page(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Trang quản lý ghi nhận thu"""
+    return templates.TemplateResponse("admin_payments.html", {
+        "request": request, 
+        "user": current_user,
+        "getVietnamTime": get_vietnam_time
+    })
+
+@app.get("/admin/handovers", response_class=HTMLResponse)
+async def admin_handovers_page(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Trang quản lý bàn giao"""
+    return templates.TemplateResponse("admin_handovers.html", {
+        "request": request, 
+        "user": current_user,
+        "getVietnamTime": get_vietnam_time
+    })
+
+@app.get("/admin/reports", response_class=HTMLResponse)
+async def admin_reports_page(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Trang báo cáo thu chi"""
+    return templates.TemplateResponse("reports_simple.html", {
+        "request": request, 
+        "user": current_user,
+        "getVietnamTime": get_vietnam_time
+    })

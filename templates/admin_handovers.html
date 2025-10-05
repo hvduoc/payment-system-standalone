@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bàn giao tiền - Hệ thống Thu Chi Airbnb</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+    {% include 'layout.html' %}
+    
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-800">Bàn giao tiền mặt</h2>
+                <p class="text-gray-600">Quản lý việc bàn giao tiền mặt giữa các thành viên</p>
+            </div>
+            <button onclick="openCreateHandoverModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+                <i class="fas fa-handshake mr-2"></i>Tạo bàn giao
+            </button>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="p-2 bg-green-100 rounded-lg">
+                        <i class="fas fa-money-bill-wave text-green-600 text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm text-gray-600">Tiền mặt chờ bàn giao</p>
+                        <p id="cashPending" class="text-2xl font-bold text-gray-900">0 đ</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="p-2 bg-blue-100 rounded-lg">
+                        <i class="fas fa-handshake text-blue-600 text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm text-gray-600">Đã bàn giao</p>
+                        <p id="totalHandovers" class="text-2xl font-bold text-gray-900">0</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="p-2 bg-purple-100 rounded-lg">
+                        <i class="fas fa-chart-line text-purple-600 text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm text-gray-600">Tổng bàn giao</p>
+                        <p id="totalAmount" class="text-2xl font-bold text-gray-900">0 đ</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Handovers List -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6">
+                <div id="loading" class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-gray-400 text-2xl"></i>
+                    <p class="text-gray-500 mt-2">Đang tải danh sách bàn giao...</p>
+                </div>
+                
+                <div id="handoversList" class="hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Thời gian</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Người bàn giao</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Người nhận</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Số tiền</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Trạng thái</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="handoversTableBody" class="divide-y divide-gray-200">
+                                <!-- Handovers will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Handover Modal -->
+    <div id="handoverModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 w-full max-w-lg mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">Tạo bàn giao tiền mặt</h3>
+                <button onclick="closeHandoverModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="handoverForm" class="space-y-4" enctype="multipart/form-data">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Người nhận</label>
+                    <select id="recipientUserId" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <option value="">Chọn người nhận</option>
+                        <!-- Recipients will be loaded dynamically -->
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Số tiền bàn giao</label>
+                    <input type="number" id="handoverAmount" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Ghi chú</label>
+                    <textarea id="handoverNotes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Hình ảnh bàn giao</label>
+                    <input type="file" id="handoverImage" accept="image/*" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                
+                <div class="flex space-x-3 pt-4">
+                    <button type="submit" class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">
+                        <i class="fas fa-handshake mr-2"></i>Tạo bàn giao
+                    </button>
+                    <button type="button" onclick="closeHandoverModal()" class="flex-1 bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400 transition">
+                        Hủy
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let handovers = [];
+        let recipients = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadRecipients();
+            loadHandovers();
+            loadDashboard();
+        });
+
+        async function loadRecipients() {
+            try {
+                const response = await axios.get('/api/recipients');
+                recipients = response.data.recipients;
+                
+                const select = document.getElementById('recipientUserId');
+                select.innerHTML = '<option value="">Chọn người nhận</option>';
+                
+                recipients.forEach(recipient => {
+                    const option = document.createElement('option');
+                    option.value = recipient.id;
+                    option.textContent = `${recipient.name} (${recipient.role}) - ${recipient.phone}`;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading recipients:', error);
+            }
+        }
+
+        async function loadHandovers() {
+            try {
+                const response = await axios.get('/api/handovers');
+                handovers = response.data.handovers;
+                renderHandovers();
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('handoversList').classList.remove('hidden');
+            } catch (error) {
+                console.error('Error loading handovers:', error);
+                document.getElementById('loading').innerHTML = `
+                    <i class="fas fa-exclamation-triangle text-red-400 text-2xl"></i>
+                    <p class="text-red-500 mt-2">Lỗi khi tải danh sách bàn giao</p>
+                `;
+            }
+        }
+
+        async function loadDashboard() {
+            try {
+                const response = await axios.get('/api/dashboard');
+                const data = response.data;
+                
+                document.getElementById('cashPending').textContent = 
+                    `${data.cash_pending_handover.toLocaleString()} đ`;
+                document.getElementById('totalHandovers').textContent = data.total_handovers;
+                document.getElementById('totalAmount').textContent = 
+                    `${(data.cash_balance || 0).toLocaleString()} đ`;
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+            }
+        }
+
+        function renderHandovers() {
+            const tbody = document.getElementById('handoversTableBody');
+            tbody.innerHTML = '';
+
+            handovers.forEach(handover => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50';
+                
+                const statusColors = {
+                    'completed': 'bg-green-100 text-green-800',
+                    'pending': 'bg-yellow-100 text-yellow-800',
+                    'cancelled': 'bg-red-100 text-red-800'
+                };
+
+                row.innerHTML = `
+                    <td class="px-4 py-3 text-sm text-gray-900">${handover.created_at}</td>
+                    <td class="px-4 py-3 text-sm text-gray-900">${handover.handover_by}</td>
+                    <td class="px-4 py-3 text-sm">
+                        <div class="text-gray-900">${handover.recipient_name}</div>
+                        <div class="text-gray-500 text-xs">${handover.recipient_phone}</div>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-900">${handover.amount.toLocaleString()} đ</td>
+                    <td class="px-4 py-3">
+                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusColors[handover.status] || 'bg-gray-100 text-gray-800'}">
+                            ${handover.status}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3">
+                        <div class="flex space-x-2">
+                            ${handover.handover_image ? 
+                                `<button onclick="viewHandoverImage('${handover.handover_image}')" class="text-blue-600 hover:text-blue-800" title="Xem hình ảnh">
+                                    <i class="fas fa-image"></i>
+                                </button>` : 
+                                ''
+                            }
+                            <button onclick="viewHandoverDetails(${handover.id})" class="text-green-600 hover:text-green-800" title="Chi tiết">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function openCreateHandoverModal() {
+            document.getElementById('handoverForm').reset();
+            document.getElementById('handoverModal').classList.remove('hidden');
+        }
+
+        function closeHandoverModal() {
+            document.getElementById('handoverModal').classList.add('hidden');
+        }
+
+        document.getElementById('handoverForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('recipient_user_id', document.getElementById('recipientUserId').value);
+            formData.append('amount', document.getElementById('handoverAmount').value);
+            formData.append('notes', document.getElementById('handoverNotes').value);
+            
+            const handoverImage = document.getElementById('handoverImage').files[0];
+            if (handoverImage) {
+                formData.append('handover_image', handoverImage);
+            }
+
+            try {
+                const response = await axios.post('/api/handovers', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
+
+                if (response.data.success) {
+                    closeHandoverModal();
+                    loadHandovers();
+                    loadDashboard();
+                    alert('Tạo bàn giao thành công!');
+                } else {
+                    alert('Lỗi: ' + (response.data.message || 'Unknown error'));
+                }
+            } catch (error) {
+                alert('Lỗi: ' + (error.response?.data?.detail || error.message));
+            }
+        });
+
+        function viewHandoverImage(imagePath) {
+            window.open(imagePath, '_blank');
+        }
+
+        function viewHandoverDetails(handoverId) {
+            const handover = handovers.find(h => h.id === handoverId);
+            if (handover) {
+                alert(`Chi tiết bàn giao:\n\nNgười bàn giao: ${handover.handover_by}\nNgười nhận: ${handover.recipient_name}\nSố tiền: ${handover.amount.toLocaleString()} đ\nTrạng thái: ${handover.status}\nGhi chú: ${handover.notes || 'Không có'}`);
+            }
+        }
+    </script>
+</body>
+</html>

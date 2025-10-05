@@ -1,0 +1,48 @@
+{% extends "payment_layout.html" %}
+
+{% block title %}Báo cáo - Hệ thống Thu Chi{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-6">
+    <div class="mb-6">
+        <h2 class="text-2xl font-bold text-gray-800">Báo cáo thu chi</h2>
+        <p class="text-gray-600">Thống kê và phân tích dữ liệu thu chi</p>
+    </div>
+
+    <!-- Coming Soon -->
+    <div class="bg-white rounded-lg shadow p-8 text-center">
+        <div class="max-w-md mx-auto">
+            <i class="fas fa-chart-line text-6xl text-gray-300 mb-4"></i>
+            <h3 class="text-xl font-semibold text-gray-700 mb-2">Tính năng báo cáo</h3>
+            <p class="text-gray-500 mb-6">Tính năng báo cáo đang được phát triển và sẽ sớm ra mắt với nhiều biểu đồ và thống kê chi tiết.</p>
+            
+            <div class="grid grid-cols-2 gap-4 text-sm">
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <i class="fas fa-money-bill-wave text-green-600 text-2xl mb-2"></i>
+                    <p class="font-medium">Báo cáo doanh thu</p>
+                    <p class="text-gray-500">Theo ngày, tháng, năm</p>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <i class="fas fa-building text-blue-600 text-2xl mb-2"></i>
+                    <p class="font-medium">Theo tòa nhà</p>
+                    <p class="text-gray-500">Phân tích từng building</p>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <i class="fas fa-credit-card text-purple-600 text-2xl mb-2"></i>
+                    <p class="font-medium">Phương thức thanh toán</p>
+                    <p class="text-gray-500">Tỷ lệ cash vs online</p>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <i class="fas fa-users text-orange-600 text-2xl mb-2"></i>
+                    <p class="font-medium">Hiệu suất nhân viên</p>
+                    <p class="text-gray-500">Thống kê thu của từng người</p>
+                </div>
+            </div>
+            
+            <a href="/admin/payments" class="inline-flex items-center mt-6 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">
+                <i class="fas fa-arrow-left mr-2"></i>Quay lại ghi nhận thu
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

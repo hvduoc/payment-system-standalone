@@ -1,0 +1,630 @@
+<!-- Enhanced Admin Payments Template with CRUD -->
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ghi nhận thu - Hệ thống Thu Chi Airbnb</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body class="bg-gray-50">
+    {% include 'layout.html' %}
+    
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-6">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-800">Ghi nhận thu</h2>
+                <p class="text-gray-600">Quản lý các khoản thu từ khách hàng - Đa tòa nhà</p>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="openBuildingModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+                    <i class="fas fa-building mr-2"></i>Quản lý tòa nhà
+                </button>
+                <button onclick="openCreatePaymentModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">
+                    <i class="fas fa-plus mr-2"></i>Thêm khoản thu
+                </button>
+            </div>
+        </div>
+
+        <!-- Filter Section -->
+        <div class="bg-white rounded-lg shadow p-4 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Lọc theo tòa nhà</label>
+                    <select id="filterBuilding" onchange="filterPayments()" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                        <option value="">Tất cả tòa nhà</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tìm kiếm</label>
+                    <input type="text" id="searchInput" onkeyup="filterPayments()" placeholder="Tìm theo booking ID, tên khách..." class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Phương thức</label>
+                    <select id="filterMethod" onchange="filterPayments()" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                        <option value="">Tất cả</option>
+                        <option value="cash">Tiền mặt</option>
+                        <option value="bank_transfer">Chuyển khoản</option>
+                        <option value="credit_card">Thẻ tín dụng</option>
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <button onclick="exportPayments()" class="w-full bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">
+                        <i class="fas fa-download mr-2"></i>Xuất Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payments List -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6">
+                <div id="loading" class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-gray-400 text-2xl"></i>
+                    <p class="text-gray-500 mt-2">Đang tải danh sách khoản thu...</p>
+                </div>
+                
+                <div id="paymentsList" class="hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Thời gian</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Booking</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Khách hàng</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Tòa nhà</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Phòng</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Số tiền</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Phương thức</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Người thu</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody id="paymentsTableBody" class="divide-y divide-gray-200">
+                                <!-- Payments will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Modal -->
+    <div id="paymentModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 w-full max-w-3xl mx-4 max-h-screen overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="paymentModalTitle" class="text-lg font-semibold">Thêm khoản thu mới</h3>
+                <button onclick="closePaymentModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="paymentForm" class="space-y-4" enctype="multipart/form-data">
+                <input type="hidden" id="paymentId" name="paymentId">
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Mã Booking *</label>
+                        <input type="text" id="bookingId" name="booking_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" required>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tên khách *</label>
+                        <input type="text" id="guestName" name="guest_name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" required>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tòa nhà</label>
+                        <select id="buildingId" name="building_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                            <option value="">Chọn tòa nhà</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Số phòng</label>
+                        <input type="text" id="roomNumber" name="room_number" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="VD: P101, A205">
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Số tiền phải thu *</label>
+                        <input type="number" id="amountDue" name="amount_due" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" required>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Số tiền đã thu *</label>
+                        <input type="number" id="amountCollected" name="amount_collected" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" required>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Phương thức thanh toán *</label>
+                        <select id="paymentMethod" name="payment_method" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" required>
+                            <option value="">Chọn phương thức</option>
+                            <option value="cash">Tiền mặt</option>
+                            <option value="bank_transfer">Chuyển khoản</option>
+                            <option value="credit_card">Thẻ tín dụng</option>
+                            <option value="momo">MoMo</option>
+                            <option value="zalopay">ZaloPay</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Người thu *</label>
+                        <input type="text" id="collectedBy" name="collected_by" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" required>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Ghi chú</label>
+                    <textarea id="notes" name="notes" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="Ghi chú thêm..."></textarea>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Hình ảnh biên lai</label>
+                    <input type="file" id="receiptImage" name="receipt_image" accept="image/*" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <p class="text-xs text-gray-500 mt-1">Chỉ chấp nhận file ảnh (JPG, PNG, GIF)</p>
+                </div>
+                
+                <div class="flex justify-end space-x-3 pt-4">
+                    <button type="button" onclick="closePaymentModal()" class="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
+                        Hủy
+                    </button>
+                    <button type="submit" id="paymentSubmitBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                        <i class="fas fa-save mr-2"></i>Lưu
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Building Management Modal -->
+    <div id="buildingModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 w-full max-w-2xl mx-4 max-h-screen overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">Quản lý tòa nhà</h3>
+                <button onclick="closeBuildingModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="mb-4">
+                <button onclick="openAddBuildingForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+                    <i class="fas fa-plus mr-2"></i>Thêm tòa nhà mới
+                </button>
+            </div>
+            
+            <div id="buildingsList" class="space-y-2">
+                <!-- Buildings will be loaded here -->
+            </div>
+            
+            <!-- Add Building Form -->
+            <div id="addBuildingForm" class="hidden mt-4 p-4 border rounded-lg bg-gray-50">
+                <h4 class="font-medium mb-3">Thêm tòa nhà mới</h4>
+                <form id="buildingForm" class="space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tên tòa nhà *</label>
+                        <input type="text" id="buildingName" class="w-full px-3 py-2 border border-gray-300 rounded-lg" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Địa chỉ</label>
+                        <input type="text" id="buildingAddress" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
+                        <textarea id="buildingDescription" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg"></textarea>
+                    </div>
+                    <div class="flex justify-end space-x-2">
+                        <button type="button" onclick="closeAddBuildingForm()" class="px-3 py-1 text-gray-600 border border-gray-300 rounded">Hủy</button>
+                        <button type="submit" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">Lưu</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let payments = [];
+        let filteredPayments = [];
+        let buildings = [];
+        let isEditing = false;
+        let editingPaymentId = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadPayments();
+            loadBuildings();
+        });
+
+        // Load data functions
+        async function loadPayments() {
+            try {
+                const response = await axios.get('/api/payments');
+                payments = response.data.payments;
+                filteredPayments = [...payments];
+                renderPayments();
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('paymentsList').classList.remove('hidden');
+            } catch (error) {
+                console.error('Error loading payments:', error);
+                showError('Lỗi khi tải danh sách khoản thu');
+            }
+        }
+
+        async function loadBuildings() {
+            try {
+                const response = await axios.get('/api/buildings');
+                buildings = response.data.buildings;
+                populateBuildingDropdowns();
+            } catch (error) {
+                console.error('Error loading buildings:', error);
+            }
+        }
+
+        function populateBuildingDropdowns() {
+            const selects = ['buildingId', 'filterBuilding'];
+            selects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                if (select) {
+                    // Clear existing options (except first one)
+                    while (select.children.length > 1) {
+                        select.removeChild(select.lastChild);
+                    }
+                    
+                    buildings.forEach(building => {
+                        const option = document.createElement('option');
+                        option.value = building.id;
+                        option.textContent = building.name;
+                        select.appendChild(option);
+                    });
+                }
+            });
+        }
+
+        // Render functions
+        function renderPayments() {
+            const tbody = document.getElementById('paymentsTableBody');
+            tbody.innerHTML = '';
+
+            if (filteredPayments.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="9" class="px-4 py-8 text-center text-gray-500">
+                            <i class="fas fa-inbox fa-2x mb-2"></i>
+                            <p>Không có khoản thu nào</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            filteredPayments.forEach(payment => {
+                const building = buildings.find(b => b.id === payment.building_id);
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50';
+                row.innerHTML = `
+                    <td class="px-4 py-3 text-sm text-gray-900">${payment.created_at}</td>
+                    <td class="px-4 py-3 text-sm font-medium text-gray-900">${payment.booking_id}</td>
+                    <td class="px-4 py-3 text-sm text-gray-900">${payment.guest_name}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${building ? building.name : 'Chưa phân loại'}</td>
+                    <td class="px-4 py-3 text-sm text-gray-600">${payment.room_number || '-'}</td>
+                    <td class="px-4 py-3 text-sm">
+                        <div class="text-green-600 font-medium">${formatMoney(payment.amount_collected)} VNĐ</div>
+                        ${payment.amount_due !== payment.amount_collected ? 
+                            `<div class="text-xs text-gray-500">Phải thu: ${formatMoney(payment.amount_due)} VNĐ</div>` : ''
+                        }
+                    </td>
+                    <td class="px-4 py-3 text-sm">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPaymentMethodClass(payment.payment_method)}">
+                            ${getPaymentMethodText(payment.payment_method)}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-900">${payment.collected_by}</td>
+                    <td class="px-4 py-3 text-sm">
+                        <div class="flex space-x-2">
+                            ${payment.receipt_image ? 
+                                `<button onclick="viewReceipt('${payment.receipt_image}')" class="text-blue-600 hover:text-blue-800" title="Xem biên lai">
+                                    <i class="fas fa-image"></i>
+                                </button>` : ''
+                            }
+                            <button onclick="editPayment(${payment.id})" class="text-yellow-600 hover:text-yellow-800" title="Chỉnh sửa">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="deletePayment(${payment.id})" class="text-red-600 hover:text-red-800" title="Xóa">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            <button onclick="viewPaymentDetails(${payment.id})" class="text-green-600 hover:text-green-800" title="Chi tiết">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Modal functions
+        function openCreatePaymentModal() {
+            isEditing = false;
+            editingPaymentId = null;
+            document.getElementById('paymentModalTitle').textContent = 'Thêm khoản thu mới';
+            document.getElementById('paymentSubmitBtn').innerHTML = '<i class="fas fa-save mr-2"></i>Lưu';
+            document.getElementById('paymentForm').reset();
+            document.getElementById('paymentId').value = '';
+            document.getElementById('paymentModal').classList.remove('hidden');
+        }
+
+        function closePaymentModal() {
+            document.getElementById('paymentModal').classList.add('hidden');
+        }
+
+        async function editPayment(paymentId) {
+            try {
+                const response = await axios.get(`/api/payments/${paymentId}`);
+                const payment = response.data;
+                
+                isEditing = true;
+                editingPaymentId = paymentId;
+                
+                document.getElementById('paymentModalTitle').textContent = 'Chỉnh sửa khoản thu';
+                document.getElementById('paymentSubmitBtn').innerHTML = '<i class="fas fa-save mr-2"></i>Cập nhật';
+                
+                // Fill form with payment data
+                document.getElementById('paymentId').value = payment.id;
+                document.getElementById('bookingId').value = payment.booking_id;
+                document.getElementById('guestName').value = payment.guest_name;
+                document.getElementById('roomNumber').value = payment.room_number || '';
+                document.getElementById('buildingId').value = payment.building_id || '';
+                document.getElementById('amountDue').value = payment.amount_due;
+                document.getElementById('amountCollected').value = payment.amount_collected;
+                document.getElementById('paymentMethod').value = payment.payment_method;
+                document.getElementById('collectedBy').value = payment.collected_by;
+                document.getElementById('notes').value = payment.notes || '';
+                
+                document.getElementById('paymentModal').classList.remove('hidden');
+            } catch (error) {
+                console.error('Error loading payment details:', error);
+                showError('Lỗi khi tải thông tin khoản thu');
+            }
+        }
+
+        async function deletePayment(paymentId) {
+            const result = await Swal.fire({
+                title: 'Xác nhận xóa',
+                text: 'Bạn có chắc chắn muốn xóa khoản thu này?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc2626',
+                cancelButtonColor: '#6b7280',
+                confirmButtonText: 'Xóa',
+                cancelButtonText: 'Hủy'
+            });
+
+            if (result.isConfirmed) {
+                try {
+                    await axios.delete(`/api/payments/${paymentId}`);
+                    showSuccess('Xóa khoản thu thành công');
+                    loadPayments();
+                } catch (error) {
+                    console.error('Error deleting payment:', error);
+                    showError(error.response?.data?.detail || 'Lỗi khi xóa khoản thu');
+                }
+            }
+        }
+
+        // Form submission
+        document.getElementById('paymentForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            
+            try {
+                let response;
+                if (isEditing) {
+                    response = await axios.put(`/api/payments/${editingPaymentId}`, formData);
+                } else {
+                    response = await axios.post('/api/payments', formData);
+                }
+
+                if (response.data.success) {
+                    showSuccess(isEditing ? 'Cập nhật thành công' : 'Thêm khoản thu thành công');
+                    closePaymentModal();
+                    loadPayments();
+                }
+            } catch (error) {
+                console.error('Error saving payment:', error);
+                showError(error.response?.data?.detail || 'Lỗi khi lưu khoản thu');
+            }
+        });
+
+        // Filter functions
+        function filterPayments() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const buildingFilter = document.getElementById('filterBuilding').value;
+            const methodFilter = document.getElementById('filterMethod').value;
+
+            filteredPayments = payments.filter(payment => {
+                const matchesSearch = !searchTerm || 
+                    payment.booking_id.toLowerCase().includes(searchTerm) ||
+                    payment.guest_name.toLowerCase().includes(searchTerm) ||
+                    payment.collected_by.toLowerCase().includes(searchTerm);
+                
+                const matchesBuilding = !buildingFilter || payment.building_id == buildingFilter;
+                const matchesMethod = !methodFilter || payment.payment_method === methodFilter;
+                
+                return matchesSearch && matchesBuilding && matchesMethod;
+            });
+
+            renderPayments();
+        }
+
+        // Building management
+        function openBuildingModal() {
+            document.getElementById('buildingModal').classList.remove('hidden');
+            renderBuildingsList();
+        }
+
+        function closeBuildingModal() {
+            document.getElementById('buildingModal').classList.add('hidden');
+        }
+
+        function renderBuildingsList() {
+            const container = document.getElementById('buildingsList');
+            container.innerHTML = '';
+
+            if (buildings.length === 0) {
+                container.innerHTML = '<p class="text-gray-500 text-center py-4">Chưa có tòa nhà nào</p>';
+                return;
+            }
+
+            buildings.forEach(building => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center p-3 border rounded-lg bg-white';
+                div.innerHTML = `
+                    <div>
+                        <h4 class="font-medium">${building.name}</h4>
+                        <p class="text-sm text-gray-600">${building.address || 'Chưa có địa chỉ'}</p>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="editBuilding(${building.id})" class="text-blue-600 hover:text-blue-800">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function openAddBuildingForm() {
+            document.getElementById('addBuildingForm').classList.remove('hidden');
+        }
+
+        function closeAddBuildingForm() {
+            document.getElementById('addBuildingForm').classList.add('hidden');
+            document.getElementById('buildingForm').reset();
+        }
+
+        document.getElementById('buildingForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('name', document.getElementById('buildingName').value);
+            formData.append('address', document.getElementById('buildingAddress').value);
+            formData.append('description', document.getElementById('buildingDescription').value);
+            
+            try {
+                const response = await axios.post('/api/buildings', formData);
+                if (response.data.success) {
+                    showSuccess('Thêm tòa nhà thành công');
+                    closeAddBuildingForm();
+                    loadBuildings();
+                    renderBuildingsList();
+                }
+            } catch (error) {
+                console.error('Error creating building:', error);
+                showError(error.response?.data?.detail || 'Lỗi khi tạo tòa nhà');
+            }
+        });
+
+        // Utility functions
+        function formatMoney(amount) {
+            return new Intl.NumberFormat('vi-VN').format(amount);
+        }
+
+        function getPaymentMethodClass(method) {
+            const classes = {
+                'cash': 'bg-green-100 text-green-800',
+                'bank_transfer': 'bg-blue-100 text-blue-800',
+                'credit_card': 'bg-purple-100 text-purple-800',
+                'momo': 'bg-pink-100 text-pink-800',
+                'zalopay': 'bg-yellow-100 text-yellow-800'
+            };
+            return classes[method] || 'bg-gray-100 text-gray-800';
+        }
+
+        function getPaymentMethodText(method) {
+            const texts = {
+                'cash': 'Tiền mặt',
+                'bank_transfer': 'Chuyển khoản',
+                'credit_card': 'Thẻ tín dụng',
+                'momo': 'MoMo',
+                'zalopay': 'ZaloPay'
+            };
+            return texts[method] || method;
+        }
+
+        function viewReceipt(imagePath) {
+            window.open(imagePath, '_blank');
+        }
+
+        function viewPaymentDetails(paymentId) {
+            const payment = payments.find(p => p.id === paymentId);
+            if (payment) {
+                const building = buildings.find(b => b.id === payment.building_id);
+                Swal.fire({
+                    title: 'Chi tiết khoản thu',
+                    html: `
+                        <div class="text-left space-y-2">
+                            <p><strong>Booking ID:</strong> ${payment.booking_id}</p>
+                            <p><strong>Khách hàng:</strong> ${payment.guest_name}</p>
+                            <p><strong>Tòa nhà:</strong> ${building ? building.name : 'Chưa phân loại'}</p>
+                            <p><strong>Phòng:</strong> ${payment.room_number || 'Chưa có'}</p>
+                            <p><strong>Số tiền:</strong> ${formatMoney(payment.amount_collected)} VNĐ</p>
+                            <p><strong>Phương thức:</strong> ${getPaymentMethodText(payment.payment_method)}</p>
+                            <p><strong>Người thu:</strong> ${payment.collected_by}</p>
+                            <p><strong>Thời gian:</strong> ${payment.created_at}</p>
+                            ${payment.notes ? `<p><strong>Ghi chú:</strong> ${payment.notes}</p>` : ''}
+                        </div>
+                    `,
+                    confirmButtonText: 'Đóng',
+                    width: '500px'
+                });
+            }
+        }
+
+        function exportPayments() {
+            // Simple CSV export
+            const csvContent = "data:text/csv;charset=utf-8," 
+                + "Booking ID,Khách hàng,Tòa nhà,Phòng,Số tiền,Phương thức,Người thu,Thời gian\n"
+                + filteredPayments.map(payment => {
+                    const building = buildings.find(b => b.id === payment.building_id);
+                    return `${payment.booking_id},${payment.guest_name},${building ? building.name : ''},${payment.room_number || ''},${payment.amount_collected},${getPaymentMethodText(payment.payment_method)},${payment.collected_by},${payment.created_at}`;
+                }).join("\n");
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `payments_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function showSuccess(message) {
+            Swal.fire({
+                icon: 'success',
+                title: 'Thành công',
+                text: message,
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+
+        function showError(message) {
+            Swal.fire({
+                icon: 'error',
+                title: 'Lỗi',
+                text: message
+            });
+        }
+    </script>
+</body>
+</html>

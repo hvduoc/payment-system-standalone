@@ -156,39 +156,54 @@ table td.nowrap {
     {% if not path.startswith('/login') %}
     <nav class="navbar">
       <div class="nav-left">
-        <span class="brand">🏨 OceanSight</span>
+        {% if path.startswith('/admin') %}
+          <!-- Admin Navigation -->
+          <span class="brand">💰 Hệ thống Thu Chi</span>
+          <a class="nav-link {{ 'is-active' if path=='/' else '' }}" href="/">📊 Tổng quan</a>
+          <a class="nav-link {{ 'is-active' if 'payments' in path else '' }}" href="/admin/payments">💳 Ghi nhận thu</a>
+          <a class="nav-link {{ 'is-active' if 'handovers' in path else '' }}" href="/admin/handovers">🤝 Bàn giao</a>
+          <a class="nav-link {{ 'is-active' if 'reports' in path else '' }}" href="/admin/reports">📈 Báo cáo</a>
+          
+          <!-- Only show user management for owner -->
+          {% if user and user.role == 'owner' %}
+          <a class="nav-link {{ 'is-active' if 'users' in path else '' }}" href="/admin/users">👥 Đội ngũ</a>
+          {% endif %}
+        {% else %}
+          <!-- Regular Navigation -->
+          <span class="brand">🏨 OceanSight</span>
+          <a class="nav-link {{ 'is-active' if path=='/' else '' }}" href="/">🏠 Trang chủ</a>
+          <!-- Brain Dashboard - Developer Only Access (Hidden from client UI) -->
+          <a class="nav-link {{ 'is-active' if path.startswith('/bookings') else '' }}" href="/bookings">📑 Đặt phòng</a>
+          <a class="nav-link {{ 'is-active' if path.startswith('/reports') else '' }}" href="/reports/monthly">📊 Báo cáo</a>  
+          <a class="nav-link {{ 'is-active' if path.startswith('/salespeople') else '' }}" href="/salespeople">👥 Nhân viên Sale</a>
+          <a class="nav-link {{ 'is-active' if path.startswith('/calendar') else '' }}" href="/calendar">📅 Lịch Trống</a>
 
-        <a class="nav-link {{ 'is-active' if path=='/' else '' }}" href="/">🏠 Trang chủ</a>
-        <!-- Brain Dashboard - Developer Only Access (Hidden from client UI) -->
-        <a class="nav-link {{ 'is-active' if path.startswith('/bookings') else '' }}" href="/bookings">📑 Đặt phòng</a>
-        <a class="nav-link {{ 'is-active' if path.startswith('/reports') else '' }}" href="/reports/monthly">📊 Báo cáo</a>  
-        <a class="nav-link {{ 'is-active' if path.startswith('/salespeople') else '' }}" href="/salespeople">👥 Nhân viên Sale</a>
-        <a class="nav-link {{ 'is-active' if path.startswith('/calendar') else '' }}" href="/calendar">📅 Lịch Trống</a>
-
-
-        <div class="nav-dropdown">
-          <a class="nav-link {{ 'is-active' if path.startswith('/buildings') or path.startswith('/properties') else '' }}" href="#">🏢 Tòa nhà & Căn hộ ▾</a>
-          <div class="dropdown-menu">
-            <a class="dropdown-item" href="/buildings">📦 Tòa nhà</a>
-            <a class="dropdown-item" href="/properties">🏠 Căn hộ</a>
-            <a class="dropdown-item" href="/property_charges">💸 Phụ phí căn hộ</a>
+          <div class="nav-dropdown">
+            <a class="nav-link {{ 'is-active' if path.startswith('/buildings') or path.startswith('/properties') else '' }}" href="#">🏢 Tòa nhà & Căn hộ ▾</a>
+            <div class="dropdown-menu">
+              <a class="dropdown-item" href="/buildings">📦 Tòa nhà</a>
+              <a class="dropdown-item" href="/properties">🏠 Căn hộ</a>
+              <a class="dropdown-item" href="/property_charges">💸 Phụ phí căn hộ</a>
+            </div>
           </div>
-        </div>
 
-        <div class="nav-dropdown">
-          <a class="nav-link {{ 'is-active' if path.startswith('/expenses') else '' }}" href="#">💰 Sổ chi ▾</a>
-          <div class="dropdown-menu">
-            <a class="dropdown-item" href="/expenses/ledger">📒 Sổ chi</a>
+          <div class="nav-dropdown">
+            <a class="nav-link {{ 'is-active' if path.startswith('/expenses') else '' }}" href="#">💰 Sổ chi ▾</a>
+            <div class="dropdown-menu">
+              <a class="dropdown-item" href="/expenses/ledger">📒 Sổ chi</a>
+            </div>
           </div>
-        </div>
 
-        <a class="btn btn-green" href="/bookings/new?channel=Offline">＋ Thêm Offline</a>
+          <a class="btn btn-green" href="/bookings/new?channel=Offline">＋ Thêm Offline</a>
+        {% endif %}
       </div>
 
       <div class="nav-spacer"></div>
       <div class="nav-right">
-        <!-- Ví dụ bổ sung -->
-        <!-- <a class="nav-link" href="/logout">Đăng xuất</a> -->
+        {% if user %}
+          <span class="pill">{{ user.full_name }} ({{ getRoleDisplayName(user.role) if getRoleDisplayName else user.role }})</span>
+          <a class="nav-link" href="/api/logout">🚪 Đăng xuất</a>
+        {% endif %}
       </div>
     </nav>
     {% endif %}

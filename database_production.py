@@ -34,6 +34,18 @@ else:
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+class Building(Base):
+    """Bảng tòa nhà"""
+    __tablename__ = "buildings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    address = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: get_vietnam_time().replace(tzinfo=None))
+    updated_at = Column(DateTime, default=lambda: get_vietnam_time().replace(tzinfo=None), onupdate=lambda: get_vietnam_time().replace(tzinfo=None))
+
 class User(Base):
     """Bảng người dùng"""
     __tablename__ = "users"
@@ -46,6 +58,7 @@ class User(Base):
     phone = Column(String(15), nullable=True)
     email = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True)
+    building_id = Column(Integer, nullable=True)  # Gán user cho tòa nhà cụ thể
     created_at = Column(DateTime, default=lambda: get_vietnam_time().replace(tzinfo=None))
     updated_at = Column(DateTime, default=lambda: get_vietnam_time().replace(tzinfo=None), onupdate=lambda: get_vietnam_time().replace(tzinfo=None))
 
@@ -54,8 +67,10 @@ class Payment(Base):
     __tablename__ = "payments"
     
     id = Column(Integer, primary_key=True, index=True)
+    building_id = Column(Integer, nullable=True)  # Thuộc tòa nhà nào
     booking_id = Column(String(50), nullable=False)
     guest_name = Column(String(100), nullable=False)
+    room_number = Column(String(20), nullable=True)  # Phòng số mấy
     amount_due = Column(Float, nullable=False)
     amount_collected = Column(Float, nullable=False)
     payment_method = Column(String(30), nullable=False)
@@ -72,13 +87,14 @@ class Handover(Base):
     __tablename__ = "handovers"
     
     id = Column(Integer, primary_key=True, index=True)
-    handover_by_user_id = Column(Integer, nullable=False)
-    recipient_user_id = Column(Integer, nullable=False)
+    building_id = Column(Integer, nullable=True)  # Thuộc tòa nhà nào
+    from_person = Column(String(100), nullable=False)  # Người bàn giao
+    to_person = Column(String(100), nullable=False)    # Người nhận
     amount = Column(Float, nullable=False)
     notes = Column(Text, nullable=True)
-    handover_image = Column(String(255), nullable=True)
+    image_path = Column(String(255), nullable=True)
     status = Column(String(20), default="completed")
-    signature_status = Column(String(20), default="pending")  # pending, signed
+    handover_by_user_id = Column(Integer, nullable=False)
     created_at = Column(DateTime, default=lambda: get_vietnam_time().replace(tzinfo=None))
     updated_at = Column(DateTime, default=lambda: get_vietnam_time().replace(tzinfo=None), onupdate=lambda: get_vietnam_time().replace(tzinfo=None))
 
