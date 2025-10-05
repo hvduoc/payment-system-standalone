@@ -7,10 +7,15 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 import os
-import pytz
 
-# Vietnam timezone
-vietnam_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+# Timezone support - fallback cho Python < 3.9
+try:
+    from zoneinfo import ZoneInfo
+    vietnam_tz = ZoneInfo('Asia/Ho_Chi_Minh')
+except ImportError:
+    # Fallback for Python < 3.9
+    from datetime import timezone, timedelta
+    vietnam_tz = timezone(timedelta(hours=7))  # UTC+7 for Vietnam
 
 def get_vietnam_time():
     """Lấy thời gian hiện tại theo múi giờ Việt Nam"""

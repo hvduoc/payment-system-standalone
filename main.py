@@ -15,7 +15,15 @@ import json
 import os
 import uuid
 import shutil
-import pytz
+
+# Timezone support - fallback cho Python < 3.9
+try:
+    from zoneinfo import ZoneInfo
+    vietnam_tz = ZoneInfo('Asia/Ho_Chi_Minh')
+except ImportError:
+    # Fallback for Python < 3.9
+    from datetime import timezone, timedelta
+    vietnam_tz = timezone(timedelta(hours=7))  # UTC+7 for Vietnam
 
 # Import các module tự tạo
 from database_production import get_db, create_tables, User, Payment, Handover, Building  
@@ -72,7 +80,7 @@ def get_role_display_name_helper(role):
     return roles.get(role, role)
 
 # Add helper to template globals với Vietnam timezone
-vietnam_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+# Timezone is already setup above during import
 
 def get_vietnam_time():
     """Lấy thời gian hiện tại theo múi giờ Việt Nam"""
