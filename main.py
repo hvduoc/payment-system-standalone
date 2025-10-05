@@ -1438,6 +1438,153 @@ async def debug_test_auth(username: str, password: str, db: Session = Depends(ge
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+# Backup & Import APIs
+@app.post("/api/backup/create")
+async def create_backup(db: Session = Depends(get_db)):
+    """Tạo backup data"""
+    try:
+        # Get all data
+        payments = db.query(Payment).all()
+        handovers = db.query(Handover).all()
+        buildings = db.query(Building).all()
+        users = db.query(User).all()
+        
+        backup_data = {
+            "backup_date": get_vietnam_time().isoformat(),
+            "payments": [{
+                "booking_id": p.booking_id,
+                "guest_name": p.guest_name,
+                "building_id": p.building_id,
+                "room_number": p.room_number,
+                "amount_collected": p.amount_collected,
+                "payment_method": p.payment_method,
+                "collected_by": p.collected_by,
+                "notes": p.notes,
+                "created_at": p.created_at.isoformat() if p.created_at else None
+            } for p in payments],
+            "handovers": [{
+                "building_id": h.building_id,
+                "handover_date": h.handover_date.isoformat() if h.handover_date else None,
+                "room_count": h.room_count,
+                "total_amount": h.total_amount,
+                "recipient": h.recipient,
+                "notes": h.notes,
+                "created_at": h.created_at.isoformat() if h.created_at else None
+            } for h in handovers],
+            "buildings": [{
+                "name": b.name,
+                "address": b.address,
+                "contact_info": b.contact_info,
+                "created_at": b.created_at.isoformat() if b.created_at else None
+            } for b in buildings],
+            "users": [{
+                "username": u.username,
+                "full_name": u.full_name,
+                "role": u.role,
+                "phone": u.phone,
+                "email": u.email,
+                "is_active": u.is_active
+            } for u in users]
+        }
+        
+        return JSONResponse({
+            "success": True,
+            "data": backup_data,
+            "summary": {
+                "payments": len(payments),
+                "handovers": len(handovers),
+                "buildings": len(buildings),
+                "users": len(users)
+            }
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/sample-data/create")
+async def create_sample_data(db: Session = Depends(get_db)):
+    """Tạo sample data cho demo"""
+    try:
+        # Check if data already exists
+        existing_payments = db.query(Payment).count()
+        existing_buildings = db.query(Building).count()
+        
+        if existing_payments > 0 or existing_buildings > 0:
+            return {"success": False, "message": "Data đã tồn tại. Sử dụng /api/sample-data/reset để reset."}
+        
+        # Create sample buildings
+        buildings_data = [
+            {"name": "Tòa nhà A - Quận 1", "address": "123 Đường Lê Lợi, Quận 1, TP.HCM", "contact_info": "028.1234.5678"},
+            {"name": "Tòa nhà B - Quận 3", "address": "456 Đường Võ Văn Tần, Quận 3, TP.HCM", "contact_info": "028.9876.5432"},
+            {"name": "Tòa nhà C - Quận 7", "address": "789 Đường Nguyễn Hữu Thọ, Quận 7, TP.HCM", "contact_info": "028.5555.6666"}
+        ]
+        
+        created_buildings = []
+        for building_data in buildings_data:
+            building = Building(
+                name=building_data["name"],
+                address=building_data["address"],
+                contact_info=building_data["contact_info"],
+                created_at=get_vietnam_time()
+            )
+            db.add(building)
+            db.flush()
+            created_buildings.append(building)
+        
+        # Create sample payments
+        import random
+        from datetime import timedelta
+        
+        sample_payments = []
+        guest_names = ["Nguyễn Văn A", "Trần Thị B", "Lê Minh C", "Phạm Thu D", "Hoàng Văn E", "Vũ Thị F"]
+        payment_methods = ["cash", "bank_transfer", "credit_card"]
+        collectors = ["Thu Chi 1", "Thu Chi 2", "Admin"]
+        
+        for i in range(15):
+            building = random.choice(created_buildings)
+            payment = Payment(
+                booking_id=f"BK{str(i+1).zfill(3)}",
+                guest_name=random.choice(guest_names),
+                building_id=building.id,
+                room_number=f"{random.randint(1,5)}{str(random.randint(1,20)).zfill(2)}",
+                amount_collected=random.randint(300, 1500) * 1000,
+                payment_method=random.choice(payment_methods),
+                collected_by=random.choice(collectors),
+                notes=f"Sample payment {i+1}",
+                created_at=get_vietnam_time() - timedelta(days=random.randint(0, 30))
+            )
+            db.add(payment)
+            sample_payments.append(payment)
+        
+        # Create sample handovers
+        for building in created_buildings:
+            handover = Handover(
+                building_id=building.id,
+                handover_date=get_vietnam_time() - timedelta(days=random.randint(1, 7)),
+                room_count=random.randint(3, 8),
+                total_amount=random.randint(2000, 8000) * 1000,
+                recipient="Kế toán",
+                notes=f"Bàn giao tiền mặt {building.name}",
+                created_at=get_vietnam_time() - timedelta(days=random.randint(1, 7))
+            )
+            db.add(handover)
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": "Sample data created successfully",
+            "summary": {
+                "buildings": len(created_buildings),
+                "payments": len(sample_payments),
+                "handovers": len(created_buildings)
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 # Khởi động server - Railway compatibility
 if __name__ == "__main__":
     import uvicorn

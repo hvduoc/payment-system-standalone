@@ -48,8 +48,17 @@
                         <option value="credit_card">Thẻ tín dụng</option>
                     </select>
                 </div>
-                <div class="flex items-end">
-                    <button onclick="exportPayments()" class="w-full bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">
+                <div class="flex items-end gap-2">
+                    <button onclick="createBackup()" class="bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition">
+                        <i class="fas fa-save mr-2"></i>Backup JSON
+                    </button>
+                    <button onclick="createSampleData()" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition">
+                        <i class="fas fa-database mr-2"></i>Tạo dữ liệu mẫu
+                    </button>
+                    <button onclick="openImportModal()" class="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition">
+                        <i class="fas fa-upload mr-2"></i>Nhập dữ liệu
+                    </button>
+                    <button onclick="exportPayments()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">
                         <i class="fas fa-download mr-2"></i>Xuất Excel
                     </button>
                 </div>
@@ -704,6 +713,244 @@
                 timer: 2000,
                 showConfirmButton: false
             });
+        }
+
+        // Import Data Functions
+        function openImportModal() {
+            Swal.fire({
+                title: 'Nhập dữ liệu thanh toán',
+                html: `
+                    <div class="text-left">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Chọn file dữ liệu:</label>
+                            <input type="file" id="importFile" accept=".json,.csv,.xlsx" class="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                            <p class="text-xs text-gray-500 mt-1">Hỗ trợ: JSON, CSV, Excel (.xlsx)</p>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Hoặc nhập JSON trực tiếp:</label>
+                            <textarea id="importJson" rows="8" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs" placeholder='[{"booking_id":"BK001","guest_name":"Nguyễn Văn A","building_id":1,"room_number":"101","amount_collected":500000,"payment_method":"cash","collected_by":"Thu Chi","notes":""}]'></textarea>
+                        </div>
+                        <div class="bg-blue-50 p-3 rounded-lg text-sm">
+                            <h4 class="font-medium text-blue-800 mb-2">📋 Định dạng dữ liệu:</h4>
+                            <ul class="text-blue-700 text-xs space-y-1">
+                                <li>• booking_id: Mã booking</li>
+                                <li>• guest_name: Tên khách hàng</li>
+                                <li>• building_id: ID tòa nhà (số)</li>
+                                <li>• room_number: Số phòng</li>
+                                <li>• amount_collected: Số tiền (số)</li>
+                                <li>• payment_method: cash/bank_transfer/credit_card</li>
+                                <li>• collected_by: Người thu</li>
+                                <li>• notes: Ghi chú (optional)</li>
+                            </ul>
+                        </div>
+                    </div>
+                `,
+                width: 600,
+                showCancelButton: true,
+                confirmButtonText: 'Nhập dữ liệu',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#f97316',
+                preConfirm: () => {
+                    const file = document.getElementById('importFile').files[0];
+                    const jsonText = document.getElementById('importJson').value.trim();
+                    
+                    if (!file && !jsonText) {
+                        Swal.showValidationMessage('Vui lòng chọn file hoặc nhập JSON');
+                        return false;
+                    }
+                    
+                    if (file) {
+                        return handleFileImport(file);
+                    } else {
+                        return handleJsonImport(jsonText);
+                    }
+                }
+            });
+        }
+
+        async function handleFileImport(file) {
+            const fileType = file.name.split('.').pop().toLowerCase();
+            
+            if (fileType === 'json') {
+                const text = await file.text();
+                return handleJsonImport(text);
+            } else if (fileType === 'csv') {
+                const text = await file.text();
+                return handleCsvImport(text);
+            } else {
+                throw new Error('Định dạng file không được hỗ trợ. Vui lòng sử dụng JSON hoặc CSV.');
+            }
+        }
+
+        async function handleJsonImport(jsonText) {
+            try {
+                const data = JSON.parse(jsonText);
+                if (!Array.isArray(data)) {
+                    throw new Error('Dữ liệu phải là một mảng');
+                }
+                
+                return await importPayments(data);
+            } catch (error) {
+                throw new Error('JSON không hợp lệ: ' + error.message);
+            }
+        }
+
+        async function handleCsvImport(csvText) {
+            try {
+                const lines = csvText.split('\n');
+                const headers = lines[0].split(',').map(h => h.trim());
+                const data = [];
+                
+                for (let i = 1; i < lines.length; i++) {
+                    if (lines[i].trim()) {
+                        const values = lines[i].split(',').map(v => v.trim());
+                        const item = {};
+                        headers.forEach((header, index) => {
+                            item[header] = values[index] || '';
+                        });
+                        data.push(item);
+                    }
+                }
+                
+                return await importPayments(data);
+            } catch (error) {
+                throw new Error('CSV không hợp lệ: ' + error.message);
+            }
+        }
+
+        async function importPayments(data) {
+            let successCount = 0;
+            let errorCount = 0;
+            const errors = [];
+            
+            for (let i = 0; i < data.length; i++) {
+                try {
+                    const payment = data[i];
+                    
+                    // Validate required fields
+                    if (!payment.booking_id || !payment.guest_name || !payment.amount_collected) {
+                        throw new Error(`Dòng ${i+1}: Thiếu thông tin bắt buộc`);
+                    }
+                    
+                    // Prepare form data
+                    const formData = new FormData();
+                    formData.append('booking_id', payment.booking_id);
+                    formData.append('guest_name', payment.guest_name);
+                    formData.append('building_id', payment.building_id || 1);
+                    formData.append('room_number', payment.room_number || '');
+                    formData.append('amount_collected', parseFloat(payment.amount_collected));
+                    formData.append('payment_method', payment.payment_method || 'cash');
+                    formData.append('collected_by', payment.collected_by || 'Admin');
+                    formData.append('notes', payment.notes || '');
+                    
+                    // Import payment
+                    await axios.post('/api/payments', formData);
+                    successCount++;
+                    
+                } catch (error) {
+                    errorCount++;
+                    errors.push(`Dòng ${i+1}: ${error.message}`);
+                }
+            }
+            
+            // Show results
+            if (successCount > 0) {
+                await loadPayments(); // Reload data
+            }
+            
+            let resultMessage = `✅ Nhập thành công: ${successCount} bản ghi`;
+            if (errorCount > 0) {
+                resultMessage += `\n❌ Lỗi: ${errorCount} bản ghi`;
+                if (errors.length > 0) {
+                    resultMessage += `\n\nChi tiết lỗi:\n${errors.slice(0, 5).join('\n')}`;
+                    if (errors.length > 5) {
+                        resultMessage += `\n... và ${errors.length - 5} lỗi khác`;
+                    }
+                }
+            }
+            
+            Swal.fire({
+                icon: successCount > 0 ? 'success' : 'error',
+                title: 'Kết quả nhập dữ liệu',
+                text: resultMessage,
+                confirmButtonColor: '#10b981'
+            });
+            
+            return true;
+        }
+
+        // Backup Functions
+        async function createBackup() {
+            try {
+                const response = await axios.post('/api/backup/create');
+                if (response.data.success) {
+                    const backupData = JSON.stringify(response.data.data, null, 2);
+                    const blob = new Blob([backupData], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = `payment_system_backup_${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                    
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Backup thành công',
+                        text: `Đã tạo backup: ${response.data.summary.payments} thanh toán, ${response.data.summary.buildings} tòa nhà, ${response.data.summary.handovers} bàn giao`,
+                        confirmButtonColor: '#10b981'
+                    });
+                }
+            } catch (error) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Lỗi',
+                    text: 'Không thể tạo backup: ' + (error.response?.data?.detail || error.message)
+                });
+            }
+        }
+
+        // Sample Data Creation
+        async function createSampleData() {
+            const result = await Swal.fire({
+                title: 'Tạo dữ liệu mẫu',
+                text: 'Bạn có muốn tạo dữ liệu mẫu cho demo? (Chỉ tạo khi database trống)',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Tạo dữ liệu',
+                cancelButtonText: 'Hủy',
+                confirmButtonColor: '#8b5cf6'
+            });
+            
+            if (result.isConfirmed) {
+                try {
+                    const response = await axios.post('/api/sample-data/create');
+                    if (response.data.success) {
+                        await loadPayments();
+                        await loadBuildings();
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Thành công',
+                            text: `Đã tạo ${response.data.summary.buildings} tòa nhà, ${response.data.summary.payments} thanh toán, ${response.data.summary.handovers} bàn giao`,
+                            confirmButtonColor: '#10b981'
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'info',
+                            title: 'Thông báo',
+                            text: response.data.message,
+                            confirmButtonColor: '#3b82f6'
+                        });
+                    }
+                } catch (error) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Lỗi',
+                        text: 'Không thể tạo dữ liệu mẫu: ' + (error.response?.data?.detail || error.message)
+                    });
+                }
+            }
         }
 
         function showError(message) {
