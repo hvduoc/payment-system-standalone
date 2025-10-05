@@ -56,6 +56,11 @@ def authenticate_user_simple(db: Session, username: str, password: str):
         print(f"❌ Authentication error: {e}")
         return False
 
+# Alias for compatibility
+def authenticate_user(db: Session, username: str, password: str):
+    """Alias cho authenticate_user_simple để compatibility"""
+    return authenticate_user_simple(db, username, password)
+
 def get_current_user_from_token(token: str, db: Session):
     """Lấy thông tin user từ JWT token"""
     try:
