@@ -91,7 +91,7 @@ app = FastAPI(
 )
 
 # Railway Free Tier: Health check endpoint for smart sleep
-@app.get("/")
+@app.get("/health")
 async def health_check():
     """Health check endpoint - optimized for Railway auto-sleep"""
     return {
@@ -102,7 +102,13 @@ async def health_check():
         "free_tier": True
     }
 
-@app.get("/health")
+# Root path redirects to login
+@app.get("/")
+async def root():
+    """Redirect root to login page"""
+    return RedirectResponse(url="/login", status_code=302)
+
+@app.get("/health/detailed")
 async def detailed_health():
     """Detailed health check with system status"""
     return {
@@ -152,6 +158,11 @@ def get_current_user(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         print(f"Authentication error: {e}")
         raise HTTPException(status_code=401, detail="Token không hợp lệ")
+
+@app.get("/dashboard")
+async def dashboard_redirect(current_user: User = Depends(get_current_user)):
+    """Dashboard route - redirect to admin payments"""
+    return RedirectResponse(url="/admin/payments", status_code=302)
 
 # Routes
 @app.get("/", response_class=HTMLResponse)
@@ -1234,8 +1245,8 @@ async def emergency_login(
         # Simple JWT with emergency key
         token = jwt.encode(payload, "emergency-key-2025", algorithm="HS256")
         
-        # Set cookie and redirect
-        response = RedirectResponse(url="/dashboard", status_code=302)
+        # Set cookie and redirect to admin dashboard
+        response = RedirectResponse(url="/admin/payments", status_code=302)
         response.set_cookie(
             key="access_token",
             value=token,
