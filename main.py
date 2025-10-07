@@ -77,6 +77,9 @@ except ImportError:
     )
     print("⚠️ Using bcrypt authentication")
 
+# Add CORS middleware import
+from fastapi.middleware.cors import CORSMiddleware
+
 # Thiết lập
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -88,6 +91,15 @@ app = FastAPI(
     title="Hệ thống Thu Chi Airbnb", 
     description="Quản lý thu chi và bàn giao tiền mặt - Production Version",
     version="2.0.0"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Railway production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Railway Free Tier: Health check endpoint for smart sleep

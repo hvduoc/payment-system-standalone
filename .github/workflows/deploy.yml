@@ -1,0 +1,119 @@
+name: Deploy to Railway with Auto Backup
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+env:
+  RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Run tests
+      run: |
+        python -m pytest test_admin.py -v
+        
+    - name: Test authentication
+      run: |
+        python debug_login.py
+        
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Railway CLI
+      run: |
+        curl -fsSL https://railway.app/install.sh | sh
+        
+    - name: Deploy to Railway
+      run: |
+        railway login --token $RAILWAY_TOKEN
+        railway up
+        
+    - name: Run database initialization
+      run: |
+        railway run python init_production.py
+        
+    - name: Test deployment
+      run: |
+        sleep 30  # Wait for deployment
+        curl -f ${{ secrets.RAILWAY_URL }}/debug/health || exit 1
+        
+  backup-setup:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Google Drive Backup
+      run: |
+        # Upload Google Drive credentials if available
+        if [ -n "${{ secrets.GOOGLE_DRIVE_CREDENTIALS }}" ]; then
+          echo "${{ secrets.GOOGLE_DRIVE_CREDENTIALS }}" > credentials.json
+          railway login --token $RAILWAY_TOKEN
+          railway variables set GOOGLE_DRIVE_ENABLED=true
+          echo "✅ Google Drive backup enabled"
+        else
+          echo "⚠️ Google Drive credentials not found, skipping backup setup"
+        fi
+        
+    - name: Test backup functionality
+      if: secrets.GOOGLE_DRIVE_CREDENTIALS != ''
+      run: |
+        railway run python -c "
+        from google_drive_backup import GoogleDriveBackup
+        try:
+            backup = GoogleDriveBackup()
+            backup.authenticate()
+            backup.create_backup_folder()
+            print('✅ Google Drive backup test successful')
+        except Exception as e:
+            print(f'❌ Google Drive backup test failed: {e}')
+            exit(1)
+        "
+        
+  notify:
+    needs: [test, deploy, backup-setup]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Notify deployment status
+      uses: 8398a7/action-slack@v3
+      if: always()
+      with:
+        status: ${{ job.status }}
+        text: |
+          Airbnb Payment System Deployment:
+          - Tests: ${{ needs.test.result }}
+          - Deploy: ${{ needs.deploy.result }}
+          - Backup Setup: ${{ needs.backup-setup.result }}
+          
+          🌐 Production URL: ${{ secrets.RAILWAY_URL }}
+          💾 Backup: Google Drive 2TB
+          📱 Mobile: Responsive PWA ready
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

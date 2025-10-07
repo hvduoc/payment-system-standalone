@@ -145,9 +145,9 @@
                     // Hiển thị thông báo thành công
                     showSuccess(`Chào mừng ${response.data.user.full_name}!`);
                     
-                    // Redirect sau 1 giây
+                    // Redirect sau 1 giây đến admin payments
                     setTimeout(() => {
-                        window.location.href = '/';
+                        window.location.href = '/admin/payments';
                     }, 1000);
                 }
                 
