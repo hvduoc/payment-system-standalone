@@ -127,8 +127,12 @@
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
+            console.log('Login form submitted');
+            
             const username = document.getElementById('username').value;
             const password = document.getElementById('password').value;
+            
+            console.log('Login attempt for:', username);
             
             // Hiện loading
             showLoading();
@@ -139,19 +143,29 @@
             formData.append('password', password);
             
             try {
+                console.log('Sending login request...');
                 const response = await axios.post('/api/login', formData);
+                console.log('Login response:', response.data);
                 
                 if (response.data.success) {
+                    console.log('Login successful, setting up redirect...');
                     // Hiển thị thông báo thành công
                     showSuccess(`Chào mừng ${response.data.user.full_name}!`);
                     
                     // Redirect sau 1 giây đến admin payments
                     setTimeout(() => {
+                        console.log('Redirecting to admin payments...');
                         window.location.href = '/admin/payments';
                     }, 1000);
+                } else {
+                    console.error('Login failed: success=false');
+                    hideLoading();
+                    showError('Đăng nhập thất bại');
                 }
                 
             } catch (error) {
+                console.error('Login error:', error);
+                console.error('Error response:', error.response?.data);
                 hideLoading();
                 if (error.response && error.response.status === 401) {
                     showError('Tên đăng nhập hoặc mật khẩu không đúng');

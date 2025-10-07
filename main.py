@@ -297,14 +297,19 @@ async def login(
             "role_display": get_role_display_name(user.role)
         }
     })
+    
+    # Cookie settings for production HTTPS
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
         max_age=1440*60,  # 24 giờ
-        secure=False  # Đặt True khi deploy HTTPS
+        secure=True,  # Required for HTTPS (Railway)
+        samesite="lax",  # Allow cross-site requests
+        path="/"  # Available for all paths
     )
     
+    print(f"🍪 Cookie set for user: {username}")
     return response
 
 @app.post("/api/payments")
