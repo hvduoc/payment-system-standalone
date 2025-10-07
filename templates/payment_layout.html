@@ -83,7 +83,7 @@
                 <div class="flex items-center space-x-6">
                     {% set path = request.url.path if request.url else '/' %}
                     
-                    <a href="/" class="nav-item px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 {{ 'bg-green-100 text-green-700' if path == '/' else '' }}">
+                    <a href="/admin/payments" class="nav-item px-3 py-2 rounded-lg text-gray-700 hover:bg-gray-100 {{ 'bg-green-100 text-green-700' if 'payments' in path else '' }}">
                         <i class="fas fa-chart-line mr-2"></i>Dashboard
                     </a>
                     
@@ -151,7 +151,7 @@
                 <!-- Mobile Menu -->
                 <div id="mobileMenu" class="hidden pb-4">
                     <div class="space-y-1">
-                        <a href="/" class="nav-item block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg {{ 'bg-green-100 text-green-700' if path == '/' else '' }}">
+                        <a href="/admin/payments" class="nav-item block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg {{ 'bg-green-100 text-green-700' if 'payments' in path else '' }}">
                             <i class="fas fa-chart-line mr-3 w-5"></i>Dashboard
                         </a>
                         
