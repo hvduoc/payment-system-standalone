@@ -270,6 +270,23 @@
         let editingPaymentId = null;
 
         document.addEventListener('DOMContentLoaded', function() {
+            // Check if user is authenticated before loading data
+            console.log('Page loaded, checking authentication...');
+            
+            // Check for access token cookie
+            const cookies = document.cookie.split(';');
+            const hasToken = cookies.some(cookie => cookie.trim().startsWith('access_token='));
+            
+            console.log('Has access token:', hasToken);
+            console.log('All cookies:', document.cookie);
+            
+            if (!hasToken) {
+                console.log('No access token found, redirecting to login...');
+                alert('Phiên đăng nhập không tồn tại. Đang chuyển về trang đăng nhập...');
+                window.location.href = '/login';
+                return;
+            }
+            
             loadPayments();
             loadBuildings();
         });
@@ -279,17 +296,26 @@
             console.log('Loading payments...');
             try {
                 const response = await axios.get('/api/payments', { timeout: 10000 });
+                console.log('API Response:', response.data);
+                
                 payments = response.data.payments || [];
                 filteredPayments = [...payments];
                 renderPayments();
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('paymentsList').classList.remove('hidden');
+                
             } catch (error) {
                 console.error('Error loading payments:', error);
+                console.error('Error status:', error.response?.status);
+                console.error('Error data:', error.response?.data);
+                
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('paymentsList').classList.remove('hidden');
                 
                 if (error.response?.status === 401) {
+                    console.log('Authentication failed, clearing cookies and redirecting...');
+                    // Clear cookies
+                    document.cookie = 'access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
                     alert('Phiên đăng nhập hết hạn. Đang chuyển về login...');
                     window.location.href = '/login';
                 } else {
