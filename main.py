@@ -218,6 +218,15 @@ async def redirect_payments():
     """Redirect old /payments route to new /admin/payments"""
     return RedirectResponse(url="/admin/payments", status_code=301)
 
+# Temporary clean test route
+@app.get("/admin/payments-test", response_class=HTMLResponse)
+async def admin_payments_test(request: Request, current_user: User = Depends(get_current_user)):
+    """Clean test version of payments page"""
+    return templates.TemplateResponse("admin_payments_clean.html", {
+        "request": request,
+        "user": current_user
+    })
+
 @app.get("/handovers") 
 async def redirect_handovers():
     """Redirect old /handovers route to new /admin/handovers"""

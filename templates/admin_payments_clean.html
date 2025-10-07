@@ -1,0 +1,83 @@
+{% extends "payment_layout.html" %}
+
+{% block title %}Ghi nhận thu - Hệ thống Thu Chi Airbnb{% endblock %}
+
+{% block extra_head %}
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Main Content -->
+<div class="container mx-auto px-4 py-6">
+    <div class="flex justify-between items-center mb-6">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-800">Ghi nhận thu</h2>
+            <p class="text-gray-600">Quản lý các khoản thu từ khách hàng - Production Version</p>
+        </div>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading" class="text-center py-8">
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-green-600"></div>
+        <p class="text-gray-500 mt-2">Đang tải danh sách khoản thu...</p>
+    </div>
+
+    <!-- Payments List -->
+    <div id="paymentsList" class="hidden">
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6">
+                <p>Danh sách thanh toán sẽ hiển thị ở đây.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    console.log('Clean template loaded');
+    
+    // Simple test
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded');
+        
+        // Check authentication
+        const cookies = document.cookie.split(';');
+        const hasToken = cookies.some(cookie => cookie.trim().startsWith('access_token='));
+        
+        console.log('Has token:', hasToken);
+        
+        if (!hasToken) {
+            alert('No authentication token found. Redirecting to login...');
+            window.location.href = '/login';
+            return;
+        }
+        
+        // Test API call
+        testApiCall();
+    });
+    
+    async function testApiCall() {
+        try {
+            console.log('Testing API call...');
+            const response = await axios.get('/api/payments', { timeout: 5000 });
+            console.log('API Success:', response.data);
+            
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('paymentsList').classList.remove('hidden');
+            
+        } catch (error) {
+            console.error('API Error:', error);
+            
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('paymentsList').classList.remove('hidden');
+            
+            if (error.response?.status === 401) {
+                alert('Authentication failed. Redirecting to login...');
+                window.location.href = '/login';
+            } else {
+                alert('Error: ' + (error.response?.data?.detail || error.message));
+            }
+        }
+    }
+</script>
+{% endblock %}
