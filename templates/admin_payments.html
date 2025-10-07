@@ -857,26 +857,21 @@
                         throw new Error(`Dòng ${i+1}: Thiếu thông tin bắt buộc`);
                     }
                     
-                    // Prepare form data
-                    const formData = new FormData();
-                    formData.append('booking_id', payment.booking_id);
-                    formData.append('guest_name', payment.guest_name);
-                    formData.append('building_id', payment.building_id || 1);
-                    formData.append('room_number', payment.room_number || '');
-                    formData.append('amount_collected', parseFloat(payment.amount_collected));
-                    formData.append('payment_method', payment.payment_method || 'cash');
-                    formData.append('collected_by', payment.collected_by || 'Admin');
-                    formData.append('notes', payment.notes || '');
+                    console.log(`Processing payment ${i+1}:`, payment);
                     
-                    // Import payment via new JSON endpoint
-                    await axios.post('/api/payments/import', {
+                    // Import payment via JSON endpoint
+                    const response = await axios.post('/api/payments/import', {
                         payments: [payment]
                     });
+                    
+                    console.log(`Payment ${i+1} import response:`, response.data);
                     successCount++;
                     
                 } catch (error) {
                     errorCount++;
-                    errors.push(`Dòng ${i+1}: ${error.message}`);
+                    console.error(`Error processing payment ${i+1}:`, error);
+                    const errorMsg = error.response?.data?.detail || error.message || 'Unknown error';
+                    errors.push(`Dòng ${i+1}: ${errorMsg}`);
                 }
             }
             
