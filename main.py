@@ -298,18 +298,21 @@ async def login(
         }
     })
     
-    # Cookie settings for production HTTPS
+    # Detect environment for cookie settings
+    is_production = request.url.hostname and ('railway.app' in str(request.url.hostname) or 'production' in str(request.url.hostname))
+    
+    # Cookie settings based on environment
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
         max_age=1440*60,  # 24 giờ
-        secure=True,  # Required for HTTPS (Railway)
-        samesite="lax",  # Allow cross-site requests
-        path="/"  # Available for all paths
+        secure=is_production,  # Only secure on production HTTPS
+        samesite="lax" if is_production else "strict",
+        path="/"
     )
     
-    print(f"🍪 Cookie set for user: {username}")
+    print(f"🍪 Cookie set for user: {username} (production: {is_production})")
     return response
 
 @app.post("/api/payments")
