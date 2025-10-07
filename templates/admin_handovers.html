@@ -1,32 +1,30 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bàn giao tiền - Hệ thống Thu Chi Airbnb</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        /* Custom modal styles */
-        .modal-overlay {
-            z-index: 9999 !important;
-            backdrop-filter: blur(2px);
-        }
-        .modal-content {
-            max-height: 85vh;
-            overflow-y: auto;
-            margin-top: 2rem;
-            margin-bottom: 2rem;
-        }
-        /* Ensure body doesn't scroll when modal is open */
-        body.modal-open {
-            overflow: hidden;
-        }
-    </style>
-</head>
-<body class="bg-gray-50">
-    {% include 'layout.html' %}
+{% extends "payment_layout.html" %}
+
+{% block title %}Bàn giao tiền - Hệ thống Thu Chi Airbnb{% endblock %}
+
+{% block extra_head %}
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<style>
+    /* Custom modal styles */
+    .modal-overlay {
+        z-index: 9999 !important;
+        backdrop-filter: blur(2px);
+    }
+    .modal-content {
+        max-height: 85vh;
+        overflow-y: auto;
+        margin-top: 2rem;
+        margin-bottom: 2rem;
+    }
+    /* Ensure body doesn't scroll when modal is open */
+    body.modal-open {
+        overflow: hidden;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
     
     <!-- Main Content -->
     <div class="container mx-auto px-4 py-6">
@@ -455,5 +453,4 @@
             }
         }
     </script>
-</body>
-</html>
+{% endblock %}

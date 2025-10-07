@@ -1,15 +1,12 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Báo cáo - Hệ thống Thu Chi Airbnb</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-</head>
-<body class="bg-gray-50">
-    {% include 'layout.html' %}
+{% extends "payment_layout.html" %}
+
+{% block title %}Báo cáo - Hệ thống Thu Chi Airbnb{% endblock %}
+
+{% block extra_head %}
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+{% endblock %}
+
+{% block content %}
     
     <!-- Main Content -->
     <div class="container mx-auto px-4 py-6">
@@ -116,5 +113,4 @@
             }
         }
     </script>
-</body>
-</html>
+{% endblock %}
