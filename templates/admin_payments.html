@@ -276,35 +276,24 @@
 
         // Load data functions
         async function loadPayments() {
+            console.log('Loading payments...');
             try {
-                console.log('Loading payments...');
-                
-                // Add timeout to prevent hanging
-                const response = await axios.get('/api/payments', {
-                    timeout: 10000  // 10 second timeout
-                });
-                
-                console.log('Payments loaded:', response.data);
+                const response = await axios.get('/api/payments', { timeout: 10000 });
                 payments = response.data.payments || [];
                 filteredPayments = [...payments];
                 renderPayments();
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('paymentsList').classList.remove('hidden');
-                
             } catch (error) {
                 console.error('Error loading payments:', error);
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('paymentsList').classList.remove('hidden');
                 
-                if (error.code === 'ECONNABORTED') {
-                    showError('Timeout: Server phản hồi quá chậm. Vui lòng thử lại.');
-                } else if (error.response?.status === 401) {
-                    showError('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
-                    setTimeout(() => {
-                        window.location.href = '/login';
-                    }, 2000);
+                if (error.response?.status === 401) {
+                    alert('Phiên đăng nhập hết hạn. Đang chuyển về login...');
+                    window.location.href = '/login';
                 } else {
-                    showError('Lỗi khi tải danh sách khoản thu: ' + (error.response?.data?.detail || error.message));
+                    showError('Lỗi tải dữ liệu: ' + (error.response?.data?.detail || error.message));
                 }
             }
         }
