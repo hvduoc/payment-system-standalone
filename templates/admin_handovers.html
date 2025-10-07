@@ -7,6 +7,23 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Custom modal styles */
+        .modal-overlay {
+            z-index: 9999 !important;
+            backdrop-filter: blur(2px);
+        }
+        .modal-content {
+            max-height: 85vh;
+            overflow-y: auto;
+            margin-top: 2rem;
+            margin-bottom: 2rem;
+        }
+        /* Ensure body doesn't scroll when modal is open */
+        body.modal-open {
+            overflow: hidden;
+        }
+    </style>
 </head>
 <body class="bg-gray-50">
     {% include 'layout.html' %}
@@ -94,8 +111,8 @@
     </div>
 
     <!-- Create Handover Modal -->
-    <div id="handoverModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
-        <div class="bg-white rounded-lg p-6 w-full max-w-lg mx-4">
+    <div id="handoverModal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4">
+        <div class="modal-content bg-white rounded-lg p-6 w-full max-w-lg">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-semibold">Tạo bàn giao tiền mặt</h3>
                 <button onclick="closeHandoverModal()" class="text-gray-400 hover:text-gray-600">
@@ -105,11 +122,16 @@
             
             <form id="handoverForm" class="space-y-4" enctype="multipart/form-data">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Người nhận</label>
-                    <select id="recipientUserId" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
-                        <option value="">Chọn người nhận</option>
-                        <!-- Recipients will be loaded dynamically -->
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Tòa nhà</label>
+                    <select id="buildingId" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                        <option value="">Chọn tòa nhà</option>
+                        <!-- Buildings will be loaded dynamically -->
                     </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Người nhận</label>
+                    <input type="text" id="toPerson" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nhập tên người nhận" required>
                 </div>
                 
                 <div>
@@ -141,30 +163,44 @@
 
     <script>
         let handovers = [];
-        let recipients = [];
+        let buildings = [];
 
         document.addEventListener('DOMContentLoaded', function() {
-            loadRecipients();
+            loadBuildings();
             loadHandovers();
             loadDashboard();
+            
+            // Close modal when clicking outside
+            document.getElementById('handoverModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeHandoverModal();
+                }
+            });
+            
+            // Close modal with Escape key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && !document.getElementById('handoverModal').classList.contains('hidden')) {
+                    closeHandoverModal();
+                }
+            });
         });
 
-        async function loadRecipients() {
+        async function loadBuildings() {
             try {
-                const response = await axios.get('/api/recipients');
-                recipients = response.data.recipients;
+                const response = await axios.get('/api/buildings');
+                buildings = response.data.buildings;
                 
-                const select = document.getElementById('recipientUserId');
-                select.innerHTML = '<option value="">Chọn người nhận</option>';
+                const select = document.getElementById('buildingId');
+                select.innerHTML = '<option value="">Chọn tòa nhà</option>';
                 
-                recipients.forEach(recipient => {
+                buildings.forEach(building => {
                     const option = document.createElement('option');
-                    option.value = recipient.id;
-                    option.textContent = `${recipient.name} (${recipient.role}) - ${recipient.phone}`;
+                    option.value = building.id;
+                    option.textContent = `${building.name} - ${building.address || ''}`;
                     select.appendChild(option);
                 });
             } catch (error) {
-                console.error('Error loading recipients:', error);
+                console.error('Error loading buildings:', error);
             }
         }
 
@@ -213,12 +249,15 @@
                     'cancelled': 'bg-red-100 text-red-800'
                 };
 
+                // Format date
+                const createdDate = new Date(handover.created_at).toLocaleString('vi-VN');
+
                 row.innerHTML = `
-                    <td class="px-4 py-3 text-sm text-gray-900">${handover.created_at}</td>
+                    <td class="px-4 py-3 text-sm text-gray-900">${createdDate}</td>
                     <td class="px-4 py-3 text-sm text-gray-900">${handover.handover_by}</td>
                     <td class="px-4 py-3 text-sm">
-                        <div class="text-gray-900">${handover.recipient_name}</div>
-                        <div class="text-gray-500 text-xs">${handover.recipient_phone}</div>
+                        <div class="text-gray-900">${handover.to_person}</div>
+                        <div class="text-gray-500 text-xs">${handover.building_name || ''}</div>
                     </td>
                     <td class="px-4 py-3 text-sm text-gray-900">${handover.amount.toLocaleString()} đ</td>
                     <td class="px-4 py-3">
@@ -228,14 +267,20 @@
                     </td>
                     <td class="px-4 py-3">
                         <div class="flex space-x-2">
-                            ${handover.handover_image ? 
-                                `<button onclick="viewHandoverImage('${handover.handover_image}')" class="text-blue-600 hover:text-blue-800" title="Xem hình ảnh">
+                            ${handover.image_path ? 
+                                `<button onclick="viewHandoverImage('${handover.image_path}')" class="text-blue-600 hover:text-blue-800" title="Xem hình ảnh">
                                     <i class="fas fa-image"></i>
                                 </button>` : 
                                 ''
                             }
                             <button onclick="viewHandoverDetails(${handover.id})" class="text-green-600 hover:text-green-800" title="Chi tiết">
                                 <i class="fas fa-eye"></i>
+                            </button>
+                            <button onclick="editHandover(${handover.id})" class="text-yellow-600 hover:text-yellow-800" title="Chỉnh sửa">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="deleteHandover(${handover.id})" class="text-red-600 hover:text-red-800" title="Xóa">
+                                <i class="fas fa-trash"></i>
                             </button>
                         </div>
                     </td>
@@ -246,18 +291,46 @@
 
         function openCreateHandoverModal() {
             document.getElementById('handoverForm').reset();
+            
+            // Reset modal for create mode
+            document.querySelector('#handoverModal h3').textContent = 'Tạo bàn giao tiền mặt';
+            document.querySelector('#handoverForm button[type="submit"]').textContent = 'Tạo bàn giao';
+            document.getElementById('handoverForm').dataset.mode = 'create';
+            
+            // Remove edit ID if exists
+            const existingIdInput = document.getElementById('editHandoverId');
+            if (existingIdInput) {
+                existingIdInput.remove();
+            }
+            
+            // Show modal and prevent body scroll
             document.getElementById('handoverModal').classList.remove('hidden');
+            document.body.classList.add('modal-open');
         }
 
         function closeHandoverModal() {
             document.getElementById('handoverModal').classList.add('hidden');
+            document.body.classList.remove('modal-open');
+            
+            // Reset form
+            document.getElementById('handoverForm').reset();
+            document.querySelector('#handoverModal h3').textContent = 'Tạo bàn giao tiền mặt';
+            document.querySelector('#handoverForm button[type="submit"]').textContent = 'Tạo bàn giao';
+            document.getElementById('handoverForm').dataset.mode = 'create';
+            
+            // Remove edit ID if exists
+            const existingIdInput = document.getElementById('editHandoverId');
+            if (existingIdInput) {
+                existingIdInput.remove();
+            }
         }
 
         document.getElementById('handoverForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const formData = new FormData();
-            formData.append('recipient_user_id', document.getElementById('recipientUserId').value);
+            formData.append('building_id', document.getElementById('buildingId').value);
+            formData.append('to_person', document.getElementById('toPerson').value);
             formData.append('amount', document.getElementById('handoverAmount').value);
             formData.append('notes', document.getElementById('handoverNotes').value);
             
@@ -266,22 +339,38 @@
                 formData.append('handover_image', handoverImage);
             }
 
+            const mode = this.dataset.mode || 'create';
+            const editId = document.getElementById('editHandoverId')?.value;
+
             try {
-                const response = await axios.post('/api/handovers', formData, {
-                    headers: {
-                        'Content-Type': 'multipart/form-data'
-                    }
-                });
+                let response;
+                
+                if (mode === 'edit' && editId) {
+                    // Update existing handover
+                    response = await axios.put(`/api/handovers/${editId}`, formData, {
+                        headers: {
+                            'Content-Type': 'multipart/form-data'
+                        }
+                    });
+                } else {
+                    // Create new handover
+                    response = await axios.post('/api/handovers', formData, {
+                        headers: {
+                            'Content-Type': 'multipart/form-data'
+                        }
+                    });
+                }
 
                 if (response.data.success) {
                     closeHandoverModal();
                     loadHandovers();
                     loadDashboard();
-                    alert('Tạo bàn giao thành công!');
+                    alert(mode === 'edit' ? 'Cập nhật bàn giao thành công!' : 'Tạo bàn giao thành công!');
                 } else {
                     alert('Lỗi: ' + (response.data.message || 'Unknown error'));
                 }
             } catch (error) {
+                console.error('Full error:', error);
                 alert('Lỗi: ' + (error.response?.data?.detail || error.message));
             }
         });
@@ -293,7 +382,76 @@
         function viewHandoverDetails(handoverId) {
             const handover = handovers.find(h => h.id === handoverId);
             if (handover) {
-                alert(`Chi tiết bàn giao:\n\nNgười bàn giao: ${handover.handover_by}\nNgười nhận: ${handover.recipient_name}\nSố tiền: ${handover.amount.toLocaleString()} đ\nTrạng thái: ${handover.status}\nGhi chú: ${handover.notes || 'Không có'}`);
+                alert(`Chi tiết bàn giao:\n\nNgười bàn giao: ${handover.handover_by}\nNgười nhận: ${handover.to_person}\nSố tiền: ${handover.amount.toLocaleString()} đ\nTrạng thái: ${handover.status}\nGhi chú: ${handover.notes || 'Không có'}`);
+            }
+        }
+
+        // Edit handover function
+        async function editHandover(handoverId) {
+            try {
+                const response = await axios.get(`/api/handovers/${handoverId}`);
+                const handover = response.data;
+                
+                // Populate form with existing data
+                document.getElementById('buildingId').value = handover.building_id || '';
+                document.getElementById('toPerson').value = handover.to_person || '';
+                document.getElementById('handoverAmount').value = handover.amount || '';
+                document.getElementById('handoverNotes').value = handover.notes || '';
+                
+                // Change modal title and form action
+                document.querySelector('#handoverModal h3').textContent = 'Chỉnh sửa bàn giao';
+                
+                // Add hidden input for handover ID
+                const existingIdInput = document.getElementById('editHandoverId');
+                if (existingIdInput) {
+                    existingIdInput.remove();
+                }
+                
+                const idInput = document.createElement('input');
+                idInput.type = 'hidden';
+                idInput.id = 'editHandoverId';
+                idInput.value = handoverId;
+                document.getElementById('handoverForm').appendChild(idInput);
+                
+                // Change submit button text
+                const submitBtn = document.querySelector('#handoverForm button[type="submit"]');
+                submitBtn.textContent = 'Cập nhật bàn giao';
+                
+                // Mark form as edit mode
+                document.getElementById('handoverForm').dataset.mode = 'edit';
+                
+                // Show modal
+                document.getElementById('handoverModal').classList.remove('hidden');
+                document.body.classList.add('modal-open');
+                
+            } catch (error) {
+                console.error('Error loading handover for edit:', error);
+                alert('Lỗi khi tải thông tin bàn giao: ' + (error.response?.data?.detail || error.message));
+            }
+        }
+
+        // Delete handover function
+        async function deleteHandover(handoverId) {
+            const handover = handovers.find(h => h.id === handoverId);
+            if (!handover) return;
+            
+            const confirmDelete = confirm(`Bạn có chắc chắn muốn xóa bàn giao này?\n\nNgười nhận: ${handover.to_person}\nSố tiền: ${handover.amount.toLocaleString()} đ\n\nThao tác này không thể hoàn tác!`);
+            
+            if (confirmDelete) {
+                try {
+                    const response = await axios.delete(`/api/handovers/${handoverId}`);
+                    
+                    if (response.data.success) {
+                        alert('Xóa bàn giao thành công!');
+                        loadHandovers();
+                        loadDashboard();
+                    } else {
+                        alert('Lỗi: ' + (response.data.message || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Error deleting handover:', error);
+                    alert('Lỗi khi xóa bàn giao: ' + (error.response?.data?.detail || error.message));
+                }
             }
         }
     </script>

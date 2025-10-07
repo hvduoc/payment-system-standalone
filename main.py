@@ -15,6 +15,8 @@ import json
 import os
 import uuid
 import shutil
+import threading
+import asyncio
 
 # Timezone support - fallback cho Python < 3.9
 try:
@@ -27,6 +29,29 @@ except ImportError:
 
 # Import các module tự tạo
 from database_production import get_db, create_tables, User, Payment, Handover, Building  
+
+# Railway Free Tier Optimizations
+import logging
+import os
+
+# Configure logging for performance (Railway optimization)
+logging.basicConfig(
+    level=logging.WARNING,  # Reduce logging overhead
+    format='%(levelname)s: %(message)s'
+)
+
+# Environment optimization for Railway free tier
+os.environ.setdefault('UVICORN_WORKERS', '1')  # Single worker
+os.environ.setdefault('UVICORN_TIMEOUT_KEEP_ALIVE', '5')  # Quick timeout
+
+# Google Drive backup import (optional)
+try:
+    from google_drive_backup import GoogleDriveBackup, daily_backup_job, setup_backup_schedule
+    GOOGLE_DRIVE_ENABLED = True
+    print("✅ Google Drive backup enabled")
+except ImportError:
+    GOOGLE_DRIVE_ENABLED = False
+    print("⚠️ Google Drive backup not available (missing dependencies)")
 
 # Try simple auth first, fallback to original if needed
 try:
@@ -64,6 +89,29 @@ app = FastAPI(
     description="Quản lý thu chi và bàn giao tiền mặt - Production Version",
     version="2.0.0"
 )
+
+# Railway Free Tier: Health check endpoint for smart sleep
+@app.get("/")
+async def health_check():
+    """Health check endpoint - optimized for Railway auto-sleep"""
+    return {
+        "status": "healthy",
+        "service": "Airbnb Payment System",
+        "version": "2.0.0",
+        "railway_optimized": True,
+        "free_tier": True
+    }
+
+@app.get("/health")
+async def detailed_health():
+    """Detailed health check with system status"""
+    return {
+        "status": "healthy",
+        "database": "connected",
+        "backup": "google_drive_enabled",
+        "optimization": "railway_free_tier",
+        "sleep_mode": "auto_enabled"
+    }
 
 templates = Jinja2Templates(directory="templates")
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
@@ -376,7 +424,8 @@ async def get_dashboard(
 @app.post("/api/handovers")
 async def create_handover(
     request: Request,
-    recipient_user_id: int = Form(...),
+    building_id: int = Form(...),
+    to_person: str = Form(...),
     amount: float = Form(...),
     notes: str = Form(default=""),
     handover_image: Optional[UploadFile] = File(None),
@@ -385,32 +434,33 @@ async def create_handover(
 ):
     """Tạo bàn giao tiền mặt"""
     
-    # Kiểm tra người nhận có tồn tại không
-    recipient = db.query(User).filter(User.id == recipient_user_id, User.is_active == True).first()
-    if not recipient:
-        raise HTTPException(status_code=400, detail="Không tìm thấy người nhận")
+    # Kiểm tra tòa nhà có tồn tại không
+    building = db.query(Building).filter(Building.id == building_id, Building.is_active == True).first()
+    if not building:
+        raise HTTPException(status_code=400, detail="Không tìm thấy tòa nhà")
     
     # Xử lý upload hình ảnh bàn giao
     image_path = None
     if handover_image and handover_image.filename:
         file_extension = handover_image.filename.split('.')[-1]
         unique_filename = f"handover_{uuid.uuid4()}.{file_extension}"
-        image_path = os.path.join(UPLOAD_DIR, unique_filename)
+        full_image_path = os.path.join(UPLOAD_DIR, unique_filename)
         
-        with open(image_path, "wb") as buffer:
+        with open(full_image_path, "wb") as buffer:
             shutil.copyfileobj(handover_image.file, buffer)
         
         image_path = f"/uploads/{unique_filename}"
     
     # Tạo handover record
     handover = Handover(
-        handover_by_user_id=current_user.id,
-        recipient_user_id=recipient_user_id,
+        building_id=building_id,
+        from_person=current_user.full_name,
+        to_person=to_person,
         amount=amount,
         notes=notes,
-        handover_image=image_path,
+        image_path=image_path,
         status="completed",
-        signature_status="pending"
+        handover_by_user_id=current_user.id
     )
     
     db.add(handover)
@@ -419,12 +469,12 @@ async def create_handover(
     
     return {"success": True, "handover": {
         "id": handover.id,
-        "handover_by": current_user.full_name,
-        "recipient_name": recipient.full_name,
-        "recipient_phone": recipient.phone,
+        "building_name": building.name,
+        "from_person": handover.from_person,
+        "to_person": handover.to_person,
         "amount": handover.amount,
         "notes": handover.notes,
-        "handover_image": handover.handover_image,
+        "image_path": handover.image_path,
         "created_at": handover.created_at.isoformat()
     }}
 
@@ -440,18 +490,18 @@ async def get_handovers(
     
     for handover in handovers:
         handover_by_user = db.query(User).filter(User.id == handover.handover_by_user_id).first()
-        recipient_user = db.query(User).filter(User.id == handover.recipient_user_id).first()
+        building = db.query(Building).filter(Building.id == handover.building_id).first()
         
         handovers_data.append({
             "id": handover.id,
+            "building_name": building.name if building else "Unknown",
+            "from_person": handover.from_person,
+            "to_person": handover.to_person,
             "handover_by": handover_by_user.full_name if handover_by_user else "Unknown",
-            "recipient_name": recipient_user.full_name if recipient_user else "Unknown",
-            "recipient_phone": recipient_user.phone if recipient_user else "",
             "amount": handover.amount,
             "notes": handover.notes,
-            "handover_image": handover.handover_image,
+            "image_path": handover.image_path,
             "status": handover.status,
-            "signature_status": handover.signature_status,
             "created_at": handover.created_at.isoformat(),
             "timestamp": handover.created_at.isoformat()
         })
@@ -1352,6 +1402,29 @@ async def debug_fix_auth(db: Session = Depends(get_db)):
         return {"status": "error", "message": str(e)}
 
 # Admin Routes - Payments and Handovers
+@app.get("/test-simple")
+async def test_simple():
+    """Test route simplest"""
+    return {"message": "Simple route works!"}
+
+@app.get("/admin/test", response_class=HTMLResponse)
+async def admin_test_page(request: Request):
+    """Test admin route"""
+    return HTMLResponse("<html><body><h1>Admin Test Works!</h1></body></html>")
+
+@app.get("/admin/payments-debug")
+async def admin_payments_debug(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Debug admin payments route"""
+    return JSONResponse({
+        "message": "Admin payments route works",
+        "user": current_user.username,
+        "role": current_user.role
+    })
+
 @app.get("/admin/payments", response_class=HTMLResponse)
 async def admin_payments_page(
     request: Request,
@@ -1359,11 +1432,19 @@ async def admin_payments_page(
     db: Session = Depends(get_db)
 ):
     """Trang quản lý ghi nhận thu"""
-    return templates.TemplateResponse("admin_payments.html", {
-        "request": request, 
-        "user": current_user,
-        "getVietnamTime": get_vietnam_time
-    })
+    print(f"🔍 admin_payments_page called by user: {current_user.username}")
+    try:
+        return templates.TemplateResponse("admin_payments.html", {
+            "request": request, 
+            "user": current_user,
+            "getVietnamTime": get_vietnam_time
+        })
+    except Exception as e:
+        print(f"❌ Template error in admin_payments: {e}")
+        return JSONResponse({
+            "error": f"Template error: {str(e)}",
+            "template": "admin_payments.html"
+        }, status_code=500)
 
 @app.get("/admin/handovers", response_class=HTMLResponse)
 async def admin_handovers_page(
@@ -1372,11 +1453,19 @@ async def admin_handovers_page(
     db: Session = Depends(get_db)
 ):
     """Trang quản lý bàn giao"""
-    return templates.TemplateResponse("admin_handovers.html", {
-        "request": request, 
-        "user": current_user,
-        "getVietnamTime": get_vietnam_time
-    })
+    print(f"🔍 admin_handovers_page called by user: {current_user.username}")
+    try:
+        return templates.TemplateResponse("admin_handovers.html", {
+            "request": request,
+            "user": current_user,
+            "getVietnamTime": get_vietnam_time
+        })
+    except Exception as e:
+        print(f"❌ Template error in admin_handovers: {e}")
+        return JSONResponse({
+            "error": f"Template error: {str(e)}",
+            "template": "admin_handovers.html"
+        }, status_code=500)
 
 @app.get("/admin/reports", response_class=HTMLResponse)
 async def admin_reports_page(
@@ -1463,13 +1552,17 @@ async def create_backup(db: Session = Depends(get_db)):
                 "created_at": p.created_at.isoformat() if p.created_at else None
             } for p in payments],
             "handovers": [{
+                "id": h.id,
                 "building_id": h.building_id,
-                "handover_date": h.handover_date.isoformat() if h.handover_date else None,
-                "room_count": h.room_count,
-                "total_amount": h.total_amount,
-                "recipient": h.recipient,
+                "from_person": h.from_person,
+                "to_person": h.to_person,
+                "amount": h.amount,
                 "notes": h.notes,
-                "created_at": h.created_at.isoformat() if h.created_at else None
+                "image_path": h.image_path,
+                "status": h.status,
+                "handover_by_user_id": h.handover_by_user_id,
+                "created_at": h.created_at.isoformat() if h.created_at else None,
+                "updated_at": h.updated_at.isoformat() if h.updated_at else None
             } for h in handovers],
             "buildings": [{
                 "name": b.name,
@@ -1500,6 +1593,404 @@ async def create_backup(db: Session = Depends(get_db)):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Google Drive Backup APIs
+@app.post("/api/gdrive/backup")
+async def backup_to_google_drive(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Upload backup to Google Drive with handover images"""
+    if not GOOGLE_DRIVE_ENABLED:
+        raise HTTPException(status_code=503, detail="Google Drive backup not available")
+        
+    try:
+        # Only allow managers and owners
+        if current_user.role not in ["manager", "owner"]:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+            
+        # Initialize Google Drive backup
+        drive_backup = GoogleDriveBackup()
+        drive_backup.authenticate()
+        drive_backup.create_backup_folder()
+        
+        # Get all data
+        payments = db.query(Payment).all()
+        handovers = db.query(Handover).all()
+        buildings = db.query(Building).all()
+        users = db.query(User).all()
+        
+        # Prepare handover data with image backup
+        handover_data = []
+        images_backed_up = 0
+        
+        for h in handovers:
+            handover_dict = {
+                "id": h.id,
+                "building_id": h.building_id,
+                "from_person": h.from_person,
+                "to_person": h.to_person,
+                "amount": h.amount,
+                "notes": h.notes,
+                "image_path": h.image_path,
+                "status": h.status,
+                "handover_by_user_id": h.handover_by_user_id,
+                "created_at": h.created_at.isoformat() if h.created_at else None,
+                "updated_at": h.updated_at.isoformat() if h.updated_at else None
+            }
+            
+            # Backup image if exists
+            if h.image_path and os.path.exists(h.image_path):
+                print(f"📷 Backing up handover image: {h.image_path}")
+                drive_filename = f"handover_{h.id}_{os.path.basename(h.image_path)}"
+                image_result = drive_backup.backup_image_to_drive(h.image_path, drive_filename)
+                if image_result:
+                    handover_dict["drive_image_id"] = image_result.get('id')
+                    handover_dict["drive_image_link"] = image_result.get('webViewLink')
+                    images_backed_up += 1
+                    print(f"✅ Image backed up: {drive_filename}")
+                else:
+                    print(f"⚠️ Failed to backup image: {h.image_path}")
+            
+            handover_data.append(handover_dict)
+        
+        # Create comprehensive backup data
+        backup_data = {
+            "backup_date": get_vietnam_time().isoformat(),
+            "version": "2.0",
+            "images_backed_up": images_backed_up,
+            "payments": [{
+                "booking_id": p.booking_id,
+                "guest_name": p.guest_name,
+                "building_id": p.building_id,
+                "room_number": p.room_number,
+                "amount_due": p.amount_due,
+                "amount_collected": p.amount_collected,
+                "payment_method": p.payment_method,
+                "collected_by": p.collected_by,
+                "notes": p.notes,
+                "receipt_image": p.receipt_image,
+                "status": p.status,
+                "added_by_user_id": p.added_by_user_id,
+                "created_at": p.created_at.isoformat() if p.created_at else None,
+                "updated_at": p.updated_at.isoformat() if p.updated_at else None
+            } for p in payments],
+            "handovers": handover_data,
+            "buildings": [{
+                "name": b.name,
+                "address": b.address,
+                "contact_info": b.contact_info,
+                "created_at": b.created_at.isoformat() if b.created_at else None
+            } for b in buildings],
+            "users": [{
+                "username": u.username,
+                "full_name": u.full_name,
+                "role": u.role,
+                "created_at": u.created_at.isoformat() if u.created_at else None
+            } for u in users]
+        }
+        
+        # Upload backup data to Google Drive
+        filename = f"airbnb_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        result = drive_backup.backup_to_drive(backup_data, filename)
+        
+        if result:
+            return {
+                "success": True,
+                "message": f"Backup uploaded successfully! {images_backed_up} images backed up.",
+                "file_info": {
+                    "name": result['name'],
+                    "size": result['size'],
+                    "created_time": result['createdTime'],
+                    "images_backed_up": images_backed_up
+                }
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to upload backup to Google Drive")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Google Drive backup error: {str(e)}")
+
+@app.get("/api/gdrive/backups")
+async def list_google_drive_backups(
+    current_user: User = Depends(get_current_user)
+):
+    """List backups on Google Drive"""
+    if not GOOGLE_DRIVE_ENABLED:
+        raise HTTPException(status_code=503, detail="Google Drive backup not available")
+        
+    try:
+        if current_user.role not in ["manager", "owner"]:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+            
+        drive_backup = GoogleDriveBackup()
+        drive_backup.authenticate()
+        drive_backup.create_backup_folder()
+        
+        backups = drive_backup.list_backups(20)
+        
+        return {
+            "success": True,
+            "backups": backups
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing Google Drive backups: {str(e)}")
+
+@app.post("/api/gdrive/setup-auto-backup")
+async def setup_auto_backup(
+    current_user: User = Depends(get_current_user)
+):
+    """Setup automatic daily backup to Google Drive"""
+    if not GOOGLE_DRIVE_ENABLED:
+        raise HTTPException(status_code=503, detail="Google Drive backup not available")
+        
+    try:
+        if current_user.role != "owner":
+            raise HTTPException(status_code=403, detail="Only owners can setup auto backup")
+            
+        # Test Google Drive connection
+        drive_backup = GoogleDriveBackup()
+        drive_backup.authenticate()
+        drive_backup.create_backup_folder()
+        
+        # Setup backup schedule in background thread
+        def start_backup_service():
+            setup_backup_schedule()
+            import schedule
+            import time
+            while True:
+                schedule.run_pending()
+                time.sleep(60)
+                
+        # Start backup service thread
+        backup_thread = threading.Thread(target=start_backup_service, daemon=True)
+        backup_thread.start()
+        
+        return {
+            "success": True,
+            "message": "Auto backup to Google Drive enabled",
+            "schedule": "Daily at 2:00 AM Vietnam time"
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Auto backup setup error: {str(e)}")
+
+@app.post("/api/gdrive/restore/{file_id}")
+async def restore_from_google_drive(
+    file_id: str,
+    restore_images: bool = True,
+    clear_existing: bool = False,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Restore data and images from Google Drive backup"""
+    if not GOOGLE_DRIVE_ENABLED:
+        raise HTTPException(status_code=503, detail="Google Drive backup not available")
+        
+    try:
+        # Only allow owners to restore
+        if current_user.role != "owner":
+            raise HTTPException(status_code=403, detail="Only owners can restore from backup")
+            
+        # Initialize Google Drive service
+        drive_backup = GoogleDriveBackup()
+        drive_backup.authenticate()
+        
+        # Restore from backup
+        restore_result = drive_backup.restore_from_backup(file_id, restore_images)
+        if not restore_result["success"]:
+            raise HTTPException(status_code=500, detail=restore_result.get("error", "Restore failed"))
+        
+        backup_data = restore_result["backup_data"]
+        restored_counts = restore_result["restored_counts"]
+        
+        # Clear existing data if requested
+        if clear_existing:
+            print("🗑️ Clearing existing data...")
+            db.query(Payment).delete()
+            db.query(Handover).delete()
+            # Don't delete buildings and users as they may be critical
+            db.commit()
+        
+        # Restore payments
+        if "payments" in backup_data:
+            for payment_data in backup_data["payments"]:
+                # Check if payment already exists
+                existing = db.query(Payment).filter(
+                    Payment.booking_id == payment_data["booking_id"],
+                    Payment.guest_name == payment_data["guest_name"]
+                ).first()
+                
+                if not existing:
+                    payment = Payment(
+                        booking_id=payment_data["booking_id"],
+                        guest_name=payment_data["guest_name"],
+                        building_id=payment_data["building_id"],
+                        room_number=payment_data["room_number"],
+                        amount_due=payment_data.get("amount_due", payment_data["amount_collected"]),  # Use amount_collected as fallback
+                        amount_collected=payment_data["amount_collected"],
+                        payment_method=payment_data["payment_method"],
+                        collected_by=payment_data["collected_by"],
+                        notes=payment_data.get("notes", ""),
+                        receipt_image=payment_data.get("receipt_image"),
+                        status=payment_data.get("status", "completed"),
+                        added_by_user_id=payment_data.get("added_by_user_id", current_user.id)
+                    )
+                    if payment_data.get("created_at"):
+                        payment.created_at = datetime.fromisoformat(payment_data["created_at"])
+                    
+                    db.add(payment)
+                    restored_counts["payments"] += 1
+        
+        # Restore handovers
+        if "handovers" in backup_data:
+            for handover_data in backup_data["handovers"]:
+                # Check if handover already exists (by from_person, to_person, amount)
+                existing = db.query(Handover).filter(
+                    Handover.from_person == handover_data["from_person"],
+                    Handover.to_person == handover_data["to_person"],
+                    Handover.amount == handover_data["amount"]
+                ).first()
+                
+                if not existing:
+                    handover = Handover(
+                        building_id=handover_data["building_id"],
+                        from_person=handover_data["from_person"],
+                        to_person=handover_data["to_person"],
+                        amount=handover_data["amount"],
+                        notes=handover_data.get("notes", ""),
+                        image_path=handover_data.get("image_path"),
+                        status=handover_data.get("status", "completed"),
+                        handover_by_user_id=handover_data.get("handover_by_user_id", current_user.id)
+                    )
+                    if handover_data.get("created_at"):
+                        handover.created_at = datetime.fromisoformat(handover_data["created_at"])
+                    if handover_data.get("updated_at"):
+                        handover.updated_at = datetime.fromisoformat(handover_data["updated_at"])
+                    
+                    db.add(handover)
+                    restored_counts["handovers"] += 1
+        
+        # Restore buildings (only if they don't exist)
+        if "buildings" in backup_data:
+            for building_data in backup_data["buildings"]:
+                existing = db.query(Building).filter(Building.name == building_data["name"]).first()
+                if not existing:
+                    building = Building(
+                        name=building_data["name"],
+                        address=building_data.get("address", ""),
+                        contact_info=building_data.get("contact_info", "")
+                    )
+                    if building_data.get("created_at"):
+                        building.created_at = datetime.fromisoformat(building_data["created_at"])
+                    
+                    db.add(building)
+                    restored_counts["buildings"] += 1
+        
+        db.commit()
+        
+        return {
+            "success": True,
+            "message": f"Restore completed successfully!",
+            "backup_info": {
+                "backup_date": backup_data.get("backup_date"),
+                "version": backup_data.get("version", "1.0")
+            },
+            "restored_counts": restored_counts
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Restore error: {str(e)}")
+
+@app.post("/api/payments/import")
+async def import_payments_json(
+    import_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Import payments from JSON data"""
+    try:
+        # Only allow managers and owners
+        if current_user.role not in ["manager", "owner"]:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        
+        payments_data = import_data.get("payments", [])
+        if not payments_data:
+            raise HTTPException(status_code=400, detail="No payment data provided")
+        
+        success_count = 0
+        error_count = 0
+        errors = []
+        
+        for i, payment_data in enumerate(payments_data):
+            try:
+                # Validate required fields
+                required_fields = ["booking_id", "guest_name", "amount_collected"]
+                missing_fields = [field for field in required_fields if not payment_data.get(field)]
+                
+                if missing_fields:
+                    errors.append(f"Row {i+1}: Missing required fields: {', '.join(missing_fields)}")
+                    error_count += 1
+                    continue
+                
+                # Check if payment already exists
+                existing = db.query(Payment).filter(
+                    Payment.booking_id == payment_data["booking_id"],
+                    Payment.guest_name == payment_data["guest_name"]
+                ).first()
+                
+                if existing:
+                    errors.append(f"Row {i+1}: Payment already exists (Booking: {payment_data['booking_id']})")
+                    error_count += 1
+                    continue
+                
+                # Create new payment
+                payment = Payment(
+                    booking_id=payment_data["booking_id"],
+                    guest_name=payment_data["guest_name"],
+                    building_id=payment_data.get("building_id", 1),
+                    room_number=payment_data.get("room_number", ""),
+                    amount_due=payment_data.get("amount_due", payment_data["amount_collected"]),
+                    amount_collected=float(payment_data["amount_collected"]),
+                    payment_method=payment_data.get("payment_method", "cash"),
+                    collected_by=payment_data.get("collected_by", current_user.username),
+                    notes=payment_data.get("notes", ""),
+                    receipt_image=payment_data.get("receipt_image"),
+                    status=payment_data.get("status", "completed"),
+                    added_by_user_id=current_user.id
+                )
+                
+                db.add(payment)
+                success_count += 1
+                
+            except Exception as e:
+                errors.append(f"Row {i+1}: {str(e)}")
+                error_count += 1
+                continue
+        
+        # Commit all successful imports
+        if success_count > 0:
+            db.commit()
+        
+        return {
+            "success": True,
+            "message": f"Import completed: {success_count} success, {error_count} errors",
+            "success_count": success_count,
+            "error_count": error_count,
+            "errors": errors[:10]  # Limit errors shown
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Import error: {str(e)}")
 
 @app.post("/api/sample-data/create")
 async def create_sample_data(db: Session = Depends(get_db)):
@@ -1588,12 +2079,19 @@ async def create_sample_data(db: Session = Depends(get_db)):
 # Khởi động server - Railway compatibility
 if __name__ == "__main__":
     import uvicorn
+    
+    # Debug: Print all routes
+    print("🔍 Registered routes:")
+    for route in app.routes:
+        if hasattr(route, 'path') and hasattr(route, 'methods'):
+            print(f"  {list(route.methods)} {route.path}")
+    
     # Railway sets PORT environment variable
-    port = int(os.environ.get("PORT", 8000))
+    port = int(os.environ.get("PORT", 8004))  # Default to 8004 for development
     print(f"🚀 Starting server on port {port}")
     
     uvicorn.run(
-        "main:app",
+        app,  # Use app object directly
         host="0.0.0.0", 
         port=port,
         reload=False  # Production mode

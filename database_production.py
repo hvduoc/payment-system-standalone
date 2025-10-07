@@ -46,6 +46,7 @@ class Building(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     address = Column(String(255), nullable=True)
+    contact_info = Column(String(255), nullable=True)  # Thêm field này
     description = Column(Text, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: get_vietnam_time().replace(tzinfo=None))

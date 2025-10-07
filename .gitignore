@@ -54,10 +54,24 @@ venv.bak/
 # Database files
 *.db
 *.sqlite3
+payment_ledger.db
 
-# Uploads
-uploads/
-static/
+# Security & Sensitive Files
+credentials.json
+token.pickle
+*.log
+
+# Temporary Files
+temp_*.json
+test_*.py
+test_*.jpg
+railway_usage.json
+
+# Uploads (keep structure but not files)
+uploads/*.jpg
+uploads/*.png
+uploads/*.gif
+!uploads/.gitkeep
 
 # IDE
 .vscode/

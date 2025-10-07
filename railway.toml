@@ -1,4 +1,6 @@
-# Railway Configuration cho Payment System
+# Railway Free Tier Configuration - Optimized for MIỄN PHÍ VĨNH VIỄN
+# Target: <400 hours/month with smart sleep patterns
+
 [build]
   builder = "dockerfile"
   dockerfilePath = "Dockerfile"
@@ -6,9 +8,27 @@
 [deploy]
   restartPolicyType = "on_failure"
   restartPolicyMaxRetries = 10
+  # Free tier optimization: Auto-sleep enabled
+  sleepOnIdle = true
+  sleepThreshold = 600  # Sleep after 10 minutes idle
+  wakeupTimeout = 30    # 30 second wakeup
 
-# Environment variables sẽ được set trên Railway dashboard
+# Environment variables optimized for free tier
 [env]
   PORT = "8000"
+  UVICORN_WORKERS = "1"           # Single worker
+  UVICORN_TIMEOUT_KEEP_ALIVE = "5" # Quick timeout
   DATABASE_URL = "${{PostgreSQL.DATABASE_URL}}"
   SECRET_KEY = "${{SECRET_KEY}}"
+  
+# Resource limits for free tier
+[resources]
+  cpu = "1000m"      # 1 CPU core limit
+  memory = "512Mi"   # 512MB RAM limit
+  
+# Health check optimized
+[healthcheck]
+  path = "/"
+  interval = 30
+  timeout = 10
+  retries = 3
