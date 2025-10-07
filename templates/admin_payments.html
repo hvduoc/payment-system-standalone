@@ -277,15 +277,35 @@
         // Load data functions
         async function loadPayments() {
             try {
-                const response = await axios.get('/api/payments');
-                payments = response.data.payments;
+                console.log('Loading payments...');
+                
+                // Add timeout to prevent hanging
+                const response = await axios.get('/api/payments', {
+                    timeout: 10000  // 10 second timeout
+                });
+                
+                console.log('Payments loaded:', response.data);
+                payments = response.data.payments || [];
                 filteredPayments = [...payments];
                 renderPayments();
                 document.getElementById('loading').classList.add('hidden');
                 document.getElementById('paymentsList').classList.remove('hidden');
+                
             } catch (error) {
                 console.error('Error loading payments:', error);
-                showError('Lỗi khi tải danh sách khoản thu');
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('paymentsList').classList.remove('hidden');
+                
+                if (error.code === 'ECONNABORTED') {
+                    showError('Timeout: Server phản hồi quá chậm. Vui lòng thử lại.');
+                } else if (error.response?.status === 401) {
+                    showError('Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 2000);
+                } else {
+                    showError('Lỗi khi tải danh sách khoản thu: ' + (error.response?.data?.detail || error.message));
+                }
             }
         }
 
