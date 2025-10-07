@@ -839,15 +839,29 @@
                 const data = JSON.parse(jsonText);
                 console.log('Parsed JSON data:', data);
                 
-                if (!Array.isArray(data)) {
-                    throw new Error('Dữ liệu phải là một mảng các object');
+                let paymentsArray = null;
+                
+                // Check if it's a backup file format (object with payments array)
+                if (data && typeof data === 'object' && data.payments && Array.isArray(data.payments)) {
+                    console.log('Detected backup format with payments array');
+                    paymentsArray = data.payments;
+                } 
+                // Check if it's direct array format
+                else if (Array.isArray(data)) {
+                    console.log('Detected direct array format');
+                    paymentsArray = data;
+                } 
+                else {
+                    throw new Error('Dữ liệu phải là mảng các object hoặc file backup hợp lệ');
                 }
                 
-                if (data.length === 0) {
-                    throw new Error('Mảng dữ liệu không được rỗng');
+                if (paymentsArray.length === 0) {
+                    throw new Error('Mảng dữ liệu thanh toán không được rỗng');
                 }
                 
-                return await importPayments(data);
+                console.log('Processing payments array with', paymentsArray.length, 'items');
+                return await importPayments(paymentsArray);
+                
             } catch (error) {
                 console.error('JSON import error:', error);
                 if (error.name === 'SyntaxError') {
@@ -1058,6 +1072,35 @@
                 }
             } catch (error) {
                 console.error('Google Drive backup error:', error);
+                
+                // Check if it's a configuration error
+                if (error.response?.status === 503) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Google Drive chưa được cấu hình',
+                        html: `
+                            <div class="text-left">
+                                <p>Google Drive backup chưa được thiết lập trên Railway.</p>
+                                <p class="mt-2"><strong>Lý do:</strong></p>
+                                <ul class="list-disc pl-5 text-sm">
+                                    <li>Thiếu Google Drive credentials</li>
+                                    <li>Thiếu dependencies trên production</li>
+                                    <li>Service account chưa được config</li>
+                                </ul>
+                                <p class="mt-2 text-xs text-gray-600">Sử dụng Backup JSON thông thường thay thế</p>
+                            </div>
+                        `,
+                        confirmButtonColor: '#f59e0b'
+                    });
+                } else {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Lỗi backup',
+                        text: error.response?.data?.detail || error.message || 'Không thể backup lên Google Drive'
+                    });
+                }
+            }
+        }
                 if (error.response?.status === 503) {
                     Swal.fire({
                         icon: 'warning',
